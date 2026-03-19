@@ -41,6 +41,7 @@ export default function GoalDetailDrawer({ goal, onClose, onEdit, onDelete }: Pr
 
   function handleDeposit(e: React.FormEvent) {
     e.preventDefault();
+    if (!goal) return;
     const v = parseFloat(depositValue.replace(',', '.'));
     if (isNaN(v) || v < 0) return;
     const newCurrent = depositMode === 'add'

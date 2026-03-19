@@ -21,10 +21,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      {/* Apply dark class before first paint — prevents theme flash */}
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark');}catch(e){}})()` }} />
-      </head>
       <body className="antialiased" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <ThemeProvider>
           <AuthProvider>

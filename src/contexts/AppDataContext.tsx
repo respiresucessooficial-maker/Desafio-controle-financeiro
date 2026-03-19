@@ -191,17 +191,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Listen to auth changes ─────────────────────────────────────────────────
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        loadForUser(session.user.id);
-      } else {
-        setLoaded(true);
-      }
-    });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        loadForUser(session.user.id);
+      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session?.user) {
+        if (userId.current !== session.user.id) loadForUser(session.user.id);
+      } else if (event === 'INITIAL_SESSION' && !session?.user) {
+        setLoaded(true);
       } else if (event === 'SIGNED_OUT') {
         userId.current = '';
         setTransactions([]); setBudgets([]); setBanks([]);

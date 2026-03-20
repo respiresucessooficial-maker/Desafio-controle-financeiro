@@ -74,9 +74,6 @@ export default function Select({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
-        animate={{
-          borderColor: open ? 'rgb(251 191 36)' : 'transparent',
-        }}
         className={`w-full flex items-center justify-between ${paddingClass} rounded-2xl border bg-slate-50 dark:bg-slate-800 ${textClass} focus:outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
           open
             ? 'border-amber-400 dark:border-amber-400 shadow-sm'

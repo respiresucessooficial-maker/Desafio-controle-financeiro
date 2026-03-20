@@ -49,6 +49,7 @@ export interface Transaction {
   icon: string;
   color: string;
   bankId?: string;
+  accountId?: string;
   description?: string;
 }
 

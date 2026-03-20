@@ -127,7 +127,9 @@ function rowToTransaction(r: any): Transaction {
     id: r.id, label: r.label, amount: Number(r.amount),
     date: r.date, category: r.category, type: r.type,
     icon: r.icon, color: r.color,
-    bankId: r.bank_id ?? undefined, description: r.description ?? undefined,
+    bankId: r.bank_id ?? undefined,
+    accountId: r.account_id ?? undefined,
+    description: r.description ?? undefined,
   };
 }
 function transactionToRow(t: Transaction, userId: string) {
@@ -135,7 +137,9 @@ function transactionToRow(t: Transaction, userId: string) {
     id: t.id, user_id: userId,
     label: t.label, amount: t.amount, date: t.date,
     category: t.category, type: t.type, icon: t.icon, color: t.color,
-    bank_id: t.bankId ?? null, description: t.description ?? null,
+    bank_id: t.bankId ?? null,
+    account_id: t.accountId ?? null,
+    description: t.description ?? null,
   };
 }
 
@@ -175,7 +179,7 @@ interface AppDataContextValue {
   goals: Goal[];
   accounts: Account[];
   loaded: boolean;
-  addTransaction: (t: Omit<Transaction, 'id'>) => void;
+  addTransaction: (t: Omit<Transaction, 'id'>) => Transaction;
   updateTransaction: (id: string, data: Partial<Omit<Transaction, 'id'>>) => void;
   deleteTransaction: (id: string) => void;
   setBudget: (b: Omit<Budget, 'id'>) => void;
@@ -186,18 +190,20 @@ interface AppDataContextValue {
   addGoal: (g: Omit<Goal, 'id'>) => void;
   updateGoal: (id: string, data: Partial<Omit<Goal, 'id'>>) => void;
   deleteGoal: (id: string) => void;
-  addAccount: (a: Omit<Account, 'id'>) => void;
+  addAccount: (a: Omit<Account, 'id'>) => Account;
   updateAccount: (id: string, data: Partial<Omit<Account, 'id'>>) => void;
   deleteAccount: (id: string) => void;
 }
 
 const AppDataContext = createContext<AppDataContextValue>({
   transactions: [], budgets: [], banks: [], goals: [], accounts: [], loaded: false,
-  addTransaction: () => {}, updateTransaction: () => {}, deleteTransaction: () => {},
+  addTransaction: () => ({ id: '', label: '', amount: 0, date: '', category: '', type: 'income', icon: '', color: '' }),
+  updateTransaction: () => {}, deleteTransaction: () => {},
   setBudget: () => {}, deleteBudget: () => {},
   addBank: () => {}, updateBank: () => {}, deleteBank: () => {},
   addGoal: () => {}, updateGoal: () => {}, deleteGoal: () => {},
-  addAccount: () => {}, updateAccount: () => {}, deleteAccount: () => {},
+  addAccount: () => ({ id: '', name: '', type: 'corrente', balance: 0, color: '', textColor: '', accentColor: '', brand: '', code: '' }),
+  updateAccount: () => {}, deleteAccount: () => {},
 });
 
 // ── Provider ──────────────────────────────────────────────────────────────────
@@ -263,12 +269,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Transactions ───────────────────────────────────────────────────────────
-  const addTransaction = useCallback((t: Omit<Transaction, 'id'>) => {
+  const addTransaction = useCallback((t: Omit<Transaction, 'id'>): Transaction => {
     const catDef = getCategoryDef(t.category);
     const newT: Transaction = { ...t, id: genId(), icon: t.icon || catDef.icon, color: t.color || catDef.color };
     setTransactions((prev) => [newT, ...prev]);
     supabase.from('transactions').insert(transactionToRow(newT, userId.current))
       .then(({ error }) => { if (error) console.error('[addTransaction]', error); });
+    return newT;
   }, []);
 
   const updateTransaction = useCallback((id: string, data: Partial<Omit<Transaction, 'id'>>) => {
@@ -397,11 +404,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Accounts ───────────────────────────────────────────────────────────────
-  const addAccount = useCallback((a: Omit<Account, 'id'>) => {
+  const addAccount = useCallback((a: Omit<Account, 'id'>): Account => {
     const newA: Account = { ...a, id: genId() };
     setAccounts((prev) => [...prev, newA]);
     supabase.from('accounts').insert(accountToRow(newA, userId.current))
       .then(({ error }) => { if (error) console.error('[addAccount]', error); });
+    return newA;
   }, []);
 
   const updateAccount = useCallback((id: string, data: Partial<Omit<Account, 'id'>>) => {

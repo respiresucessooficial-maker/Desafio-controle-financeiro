@@ -5,10 +5,33 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Building2, ChevronLeft, Search } from 'lucide-react';
 import { useAppData } from '@/contexts/AppDataContext';
 import { Account, AccountType } from '@/types';
-import { INSTITUTIONS } from '@/data/institutions';
+import { INSTITUTIONS, Institution } from '@/data/institutions';
 import InstitutionTile from '@/components/ui/InstitutionTile';
 import { ACCOUNT_TYPES } from '@/data/accountTypes';
 import { formatCurrencyInput, parseCurrencyInput } from '@/lib/currencyInput';
+import { getInstitutionLogoSources } from '@/utils/logoSources';
+
+function InstitutionLogo({ inst }: { inst: Institution }) {
+  const sources = getInstitutionLogoSources(inst);
+  const [idx, setIdx] = useState(0);
+  const failed = idx >= sources.length;
+  return (
+    <div className="w-8 h-8 rounded-lg bg-white dark:bg-white/90 flex items-center justify-center shadow overflow-hidden shrink-0">
+      {!failed && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={sources[idx]}
+          alt={inst.name}
+          width={24}
+          height={24}
+          className="w-6 h-6 object-contain"
+          onError={() => setIdx((i) => i + 1)}
+        />
+      )}
+      {failed && <Building2 size={16} className="text-slate-400" />}
+    </div>
+  );
+}
 
 const emptyForm = {
   type: 'corrente' as AccountType,
@@ -24,7 +47,7 @@ interface Props {
 }
 
 export default function AddAccountModal({ isOpen, onClose, editAccount }: Props) {
-  const { addAccount, updateAccount } = useAppData();
+  const { addAccount, updateAccount, addTransaction } = useAppData();
   const isEditing = !!editAccount;
   const [form, setForm] = useState(emptyForm);
   const [selectedId, setSelectedId] = useState<string>('');
@@ -83,10 +106,39 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
       code: inst.code,
     };
 
+    const today = new Date().toISOString().slice(0, 10);
+
     if (isEditing && editAccount) {
       updateAccount(editAccount.id, data);
+      const diff = balance - editAccount.balance;
+      if (diff !== 0) {
+        addTransaction({
+          label: 'Ajuste de saldo',
+          amount: Math.abs(diff),
+          type: diff > 0 ? 'income' : 'expense',
+          date: today,
+          category: 'Outros',
+          icon: 'BarChart2',
+          color: inst.accentColor,
+          accountId: editAccount.id,
+          description: `Ajuste de saldo: ${diff > 0 ? '+' : ''}${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(diff)}`,
+        });
+      }
     } else {
-      addAccount(data);
+      const newAcc = addAccount(data);
+      if (balance > 0) {
+        addTransaction({
+          label: 'Saldo inicial',
+          amount: balance,
+          type: 'income',
+          date: today,
+          category: 'Outros',
+          icon: 'Home',
+          color: inst.accentColor,
+          accountId: newAcc.id,
+          description: 'Saldo inicial da conta',
+        });
+      }
     }
 
     setForm(emptyForm);
@@ -211,10 +263,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
                     {/* Institution info pill */}
                     {inst && (
                       <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/8">
-                        <div className="w-8 h-8 rounded-lg bg-white dark:bg-white/90 flex items-center justify-center shadow overflow-hidden shrink-0">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={inst.logo} alt={inst.name} width={24} height={24} className="w-6 h-6 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        </div>
+                        <InstitutionLogo inst={inst} />
                         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{inst.name}</span>
                         <span className="ml-auto text-xs text-slate-400 font-mono shrink-0">COMPE {inst.code}</span>
                       </div>

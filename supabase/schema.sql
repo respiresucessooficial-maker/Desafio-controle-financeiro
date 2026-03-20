@@ -55,6 +55,7 @@ create table if not exists transactions (
   icon        text not null,
   color       text not null,
   bank_id     text,
+  account_id  text references accounts(id) on delete set null,
   description text,
   created_at  timestamptz default now()
 );
@@ -82,11 +83,12 @@ create table if not exists goals (
 );
 
 -- ── Indexes ──────────────────────────────────────────────────────────────────
-create index if not exists accounts_user_id_idx     on accounts(user_id);
-create index if not exists banks_user_id_idx        on banks(user_id);
-create index if not exists transactions_user_id_idx on transactions(user_id);
-create index if not exists budgets_user_id_idx      on budgets(user_id);
-create index if not exists goals_user_id_idx        on goals(user_id);
+create index if not exists accounts_user_id_idx          on accounts(user_id);
+create index if not exists banks_user_id_idx             on banks(user_id);
+create index if not exists transactions_user_id_idx      on transactions(user_id);
+create index if not exists transactions_account_id_idx   on transactions(account_id);
+create index if not exists budgets_user_id_idx           on budgets(user_id);
+create index if not exists goals_user_id_idx             on goals(user_id);
 
 -- ── Row Level Security ────────────────────────────────────────────────────────
 alter table accounts     enable row level security;

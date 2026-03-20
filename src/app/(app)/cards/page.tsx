@@ -2,9 +2,10 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Building2, CreditCard, Pencil, Plus, X } from 'lucide-react';
+import { Building2, CreditCard, History, Pencil, Plus, X } from 'lucide-react';
 import BankCard from '@/components/cards/BankCard';
 import CardDetailDrawer from '@/components/cards/CardDetailDrawer';
+import AccountDetailDrawer from '@/components/cards/AccountDetailDrawer';
 import AddCardModal from '@/components/cards/AddCardModal';
 import AddAccountModal from '@/components/cards/AddAccountModal';
 import { useAppData } from '@/contexts/AppDataContext';
@@ -21,11 +22,13 @@ function AccountTile({
   selected,
   onClick,
   onEdit,
+  onHistory,
 }: {
   account: Account;
   selected: boolean;
   onClick: () => void;
   onEdit: () => void;
+  onHistory: () => void;
 }) {
   const inst = account.institutionId
     ? INSTITUTIONS.find((i) => i.id === account.institutionId)
@@ -54,11 +57,11 @@ function AccountTile({
   const typeLabel = ACCOUNT_TYPE_LABELS[account.type] ?? account.type;
 
   return (
-    <motion.button
+    <motion.div
       whileHover={{ scale: 1.02, y: -2 }}
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
-      className={`group relative flex w-56 shrink-0 items-center gap-3 rounded-2xl border px-4 py-3.5 text-left transition-colors ${
+      className={`group relative flex w-56 shrink-0 cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3.5 text-left transition-colors ${
         selected
           ? 'border-amber-400 bg-amber-50 dark:border-amber-500/60 dark:bg-amber-500/10'
           : 'border-slate-100 bg-white hover:border-amber-200 dark:border-white/8 dark:bg-card dark:hover:border-amber-500/30'
@@ -91,39 +94,43 @@ function AccountTile({
         <p className="mt-0.5 text-base font-bold text-slate-900 dark:text-slate-50">
           {tileFmt.format(account.balance)}
         </p>
-        <div className="mt-1 flex items-center gap-1.5">
-          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-slate-400">
+        <div className="mt-1 flex flex-col gap-0.5">
+          <span className="self-start rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-slate-400">
             {typeLabel}
           </span>
-          {account.agency && (
-            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
-              Ag. **{account.agency.slice(-2)}
-            </span>
-          )}
-          {account.accountNumber && (
-            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
-              ...{account.accountNumber.slice(-3)}
+          {(account.agency || account.accountNumber) && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-slate-400 dark:text-slate-500">
+              {account.agency && <>Ag. **{account.agency.slice(-2)}</>}
+              {account.agency && account.accountNumber && <span className="opacity-40">·</span>}
+              {account.accountNumber && <>...{account.accountNumber.slice(-3)}</>}
             </span>
           )}
         </div>
       </div>
 
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onEdit();
-        }}
-        className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-slate-400 opacity-0 transition-all hover:bg-amber-50 hover:text-amber-500 group-hover:opacity-100 dark:bg-white/10 dark:hover:bg-amber-500/10"
-      >
-        <Pencil size={11} />
-      </button>
+      <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 transition-all group-hover:opacity-100">
+        <button
+          onClick={(e) => { e.stopPropagation(); onHistory(); }}
+          className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-slate-400 hover:bg-amber-50 hover:text-amber-500 dark:bg-white/10 dark:hover:bg-amber-500/10 transition-colors"
+          title="Ver histórico"
+        >
+          <History size={11} />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-slate-400 hover:bg-amber-50 hover:text-amber-500 dark:bg-white/10 dark:hover:bg-amber-500/10 transition-colors"
+          title="Editar conta"
+        >
+          <Pencil size={11} />
+        </button>
+      </div>
 
       {selected && (
         <div className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500">
           <X size={8} className="text-white" strokeWidth={3} />
         </div>
       )}
-    </motion.button>
+    </motion.div>
   );
 }
 
@@ -131,6 +138,7 @@ export default function CardsPage() {
   const { banks, accounts, transactions } = useAppData();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [detailBank, setDetailBank] = useState<Bank | null>(null);
+  const [detailAccount, setDetailAccount] = useState<Account | null>(null);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [cardModalOpen, setCardModalOpen] = useState(false);
   const [editAccount, setEditAccount] = useState<Account | undefined>();
@@ -283,26 +291,29 @@ export default function CardsPage() {
                     setEditAccount(account);
                     setAccountModalOpen(true);
                   }}
+                  onHistory={() => setDetailAccount(account)}
                 />
               ))}
 
-              <motion.button
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => setAccountModalOpen(true)}
-                className="group relative flex min-h-[144px] w-56 shrink-0 cursor-pointer flex-col items-center justify-center gap-4 rounded-[28px] border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-amber-50/60 px-6 py-6 text-center shadow-[0_14px_34px_rgba(245,158,11,0.08)] transition-all hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-[0_20px_44px_rgba(245,158,11,0.14)] dark:border-amber-500/25 dark:from-amber-500/10 dark:via-card dark:to-card"
-              >
-                <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/70 to-transparent dark:via-amber-500/30" />
-                <div className="mt-1 flex h-8 w-14 items-center justify-center rounded-full bg-white/90 text-amber-500 shadow-sm ring-1 ring-amber-100 transition-transform group-hover:scale-105 dark:bg-white/10 dark:ring-amber-500/20">
-                  <Plus size={20} />
-                </div>
-                <div className="max-w-[176px] space-y-1.5 px-1">
-                  <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Nova conta</span>
-                  <span className="block text-xs text-slate-500 dark:text-slate-400">
-                    Adicione uma conta para organizar seus saldos.
-                  </span>
-                </div>
-              </motion.button>
+              {accounts.length === 0 && (
+                <motion.button
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setAccountModalOpen(true)}
+                  className="group relative flex min-h-[144px] w-56 shrink-0 cursor-pointer flex-col items-center justify-center gap-4 rounded-[28px] border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-amber-50/60 px-6 py-6 text-center shadow-[0_14px_34px_rgba(245,158,11,0.08)] transition-all hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-[0_20px_44px_rgba(245,158,11,0.14)] dark:border-amber-500/25 dark:from-amber-500/10 dark:via-card dark:to-card"
+                >
+                  <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/70 to-transparent dark:via-amber-500/30" />
+                  <div className="mt-1 flex h-8 w-14 items-center justify-center rounded-full bg-white/90 text-amber-500 shadow-sm ring-1 ring-amber-100 transition-transform group-hover:scale-105 dark:bg-white/10 dark:ring-amber-500/20">
+                    <Plus size={20} />
+                  </div>
+                  <div className="max-w-[176px] space-y-1.5 px-1">
+                    <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Nova conta</span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">
+                      Adicione uma conta para organizar seus saldos.
+                    </span>
+                  </div>
+                </motion.button>
+              )}
             </div>
           </div>
         </section>
@@ -343,7 +354,7 @@ export default function CardsPage() {
               </motion.div>
             ))}
 
-            {!selectedAccountId && (
+            {!selectedAccountId && banks.length === 0 && (
               <motion.div variants={itemVariants}>
                 <motion.div
                   onClick={() => setCardModalOpen(true)}
@@ -372,6 +383,12 @@ export default function CardsPage() {
         bank={detailBank}
         transactions={transactions}
         onClose={() => setDetailBank(null)}
+      />
+      <AccountDetailDrawer
+        account={detailAccount}
+        banks={banks}
+        transactions={transactions}
+        onClose={() => setDetailAccount(null)}
       />
       <AddAccountModal
         isOpen={accountModalOpen}

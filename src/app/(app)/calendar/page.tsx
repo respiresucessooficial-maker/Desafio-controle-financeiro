@@ -962,18 +962,6 @@ export default function CalendarPage() {
           {/* Legend (month view) */}
           {view === 'month' && (
             <div className="flex items-center gap-4 mb-4 flex-wrap">
-              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Gastos:</span>
-              {[
-                { color: 'bg-green-100 dark:bg-green-500/20', label: 'Baixo' },
-                { color: 'bg-amber-100 dark:bg-amber-500/20', label: 'Médio' },
-                { color: 'bg-red-100 dark:bg-red-500/15',    label: 'Alto'  },
-              ].map(({ color, label }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <div className={`w-3 h-3 rounded-sm ${color}`} />
-                  <span className="text-[10px] text-slate-400">{label}</span>
-                </div>
-              ))}
-
               <div className="ml-auto flex items-center gap-3">
                 {/* Card dates legend */}
                 {showCardDates && (

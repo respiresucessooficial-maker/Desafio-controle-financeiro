@@ -3,7 +3,7 @@
 import { ChangeEvent, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Bell, Smartphone, Shield, Globe, Moon,
+  Bell, Globe, Moon,
   ChevronRight, Camera, Mail, Phone,
   ChevronDown, AlertTriangle, Trash2, X, User,
 } from 'lucide-react';
@@ -208,9 +208,6 @@ export default function SettingsPage() {
   const { isDark, toggle: toggleTheme } = useTheme();
   const { user, avatarUrl, setAvatarUrl } = useAuth();
   const [notifications, setNotifications] = useState(true);
-  const [mobileAccess, setMobileAccess]   = useState(true);
-  const [emailAlerts, setEmailAlerts]     = useState(false);
-  const [biometrics, setBiometrics]       = useState(true);
   const [dangerOpen, setDangerOpen]       = useState(false);
   const [deleteStep, setDeleteStep]       = useState<0 | 1 | 2>(0);
   const [avatarFeedback, setAvatarFeedback] = useState('');
@@ -336,26 +333,17 @@ export default function SettingsPage() {
         {/* Notifications */}
         <div className="bg-white dark:bg-card rounded-2xl p-6 border border-slate-100 dark:border-white/8 mb-6">
           <h2 className="text-base font-bold text-slate-900 dark:text-slate-50 mb-5">Notificações</h2>
-          <div className="flex flex-col gap-4">
-            {[
-              { icon: Bell,       label: 'Notificações push', desc: 'Alertas em tempo real no app',  value: notifications, set: setNotifications },
-              { icon: Smartphone, label: 'Acesso mobile',     desc: 'Login via dispositivo móvel',  value: mobileAccess,  set: setMobileAccess  },
-              { icon: Mail,       label: 'Alertas por email', desc: 'Resumo semanal das finanças',  value: emailAlerts,   set: setEmailAlerts   },
-              { icon: Shield,     label: 'Biometria',         desc: 'Acesso com impressão digital', value: biometrics,    set: setBiometrics    },
-            ].map(({ icon: Icon, label, desc, value, set }) => (
-              <div key={label} className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/10 flex items-center justify-center">
-                    <Icon size={16} className="text-slate-500 dark:text-slate-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{label}</p>
-                    <p className="text-xs text-slate-400">{desc}</p>
-                  </div>
-                </div>
-                <Toggle enabled={value} onChange={() => set(!value)} />
+          <div className="flex items-center justify-between py-1">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/10 flex items-center justify-center">
+                <Bell size={16} className="text-slate-500 dark:text-slate-400" />
               </div>
-            ))}
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Notificações</p>
+                <p className="text-xs text-slate-400">Alertas em tempo real no app</p>
+              </div>
+            </div>
+            <Toggle enabled={notifications} onChange={() => setNotifications(!notifications)} />
           </div>
         </div>
 
@@ -392,21 +380,6 @@ export default function SettingsPage() {
               <Toggle enabled={isDark} onChange={toggleTheme} />
             </div>
 
-            <motion.div
-              whileHover={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC' }}
-              className="flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/10 flex items-center justify-center">
-                  <Shield size={16} className="text-slate-500 dark:text-slate-400" />
-                </div>
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Segurança</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Autenticação 2FA</span>
-                <ChevronRight size={16} className="text-slate-300 dark:text-slate-600" />
-              </div>
-            </motion.div>
           </div>
         </div>
 

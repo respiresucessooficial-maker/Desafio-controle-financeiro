@@ -26,6 +26,8 @@ import {
   BookOpen,
   TrendingUp,
   Pencil,
+  ChevronDown,
+  CalendarDays,
 } from 'lucide-react';
 import { Bank, Transaction } from '@/types';
 import BankCard from './BankCard';
@@ -57,14 +59,47 @@ interface Props {
 }
 
 
+const MONTHS_PT = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
 export default function CardDetailDrawer({ bank, transactions, onClose }: Props) {
   const [editOpen, setEditOpen] = useState(false);
+  const [futureOpen, setFutureOpen] = useState(false);
 
   if (!bank) return null;
 
   const cardTransactions = transactions
     .filter((t) => t.bankId === bank.id)
     .slice(0, 5);
+
+  // Future invoices: transactions linked to this card dated after the current month
+  const now = new Date();
+  const currentYearMonth = now.getFullYear() * 12 + now.getMonth();
+
+  const futureTransactions = transactions
+    .filter((t) => {
+      if (t.bankId !== bank.id) return false;
+      const d = new Date(t.date + 'T00:00:00');
+      return d.getFullYear() * 12 + d.getMonth() > currentYearMonth;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Group by year-month
+  const futureByMonth = futureTransactions.reduce<Record<string, { label: string; total: number; items: Transaction[] }>>(
+    (acc, t) => {
+      const d = new Date(t.date + 'T00:00:00');
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!acc[key]) {
+        acc[key] = { label: `${MONTHS_PT[d.getMonth()]}/${d.getFullYear()}`, total: 0, items: [] };
+      }
+      acc[key].total += Math.abs(t.amount);
+      acc[key].items.push(t);
+      return acc;
+    },
+    {},
+  );
 
   const creditLimit = bank.creditLimit ?? 0;
   const creditUsed = bank.creditUsed ?? 0;
@@ -248,6 +283,69 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                   </div>
                 )}
               </div>
+
+              {/* Future invoices */}
+              {Object.keys(futureByMonth).length > 0 && (
+                <div className="bg-slate-50 dark:bg-white/5 rounded-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setFutureOpen((o) => !o)}
+                    className="w-full flex items-center justify-between px-4 py-4 hover:bg-slate-100 dark:hover:bg-white/8 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CalendarDays size={14} className="text-amber-500" />
+                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                        Faturas futuras
+                      </p>
+                      <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                        {Object.keys(futureByMonth).length} {Object.keys(futureByMonth).length === 1 ? 'mês' : 'meses'}
+                      </span>
+                    </div>
+                    <motion.div animate={{ rotate: futureOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                      <ChevronDown size={15} className="text-slate-400" />
+                    </motion.div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {futureOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: 'easeInOut' }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-4 pb-4 flex flex-col gap-3">
+                          {Object.entries(futureByMonth).map(([key, month]) => (
+                            <div key={key} className="bg-white dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/8 overflow-hidden">
+                              {/* Month header */}
+                              <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100 dark:border-white/8">
+                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{month.label}</p>
+                                <p className="text-xs font-bold text-red-500 dark:text-red-400">−{fmt(month.total)}</p>
+                              </div>
+                              {/* Transactions */}
+                              <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
+                                {month.items.map((tx) => {
+                                  const Icon = iconMap[tx.icon] ?? ShoppingCart;
+                                  return (
+                                    <div key={tx.id} className="flex items-center gap-2.5 px-3 py-2">
+                                      <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: tx.color + '20' }}>
+                                        <Icon size={12} style={{ color: tx.color }} strokeWidth={2} />
+                                      </div>
+                                      <p className="flex-1 text-xs text-slate-700 dark:text-slate-200 truncate">{tx.label}</p>
+                                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0">{fmt(Math.abs(tx.amount))}</p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
 
               {/* Invoice history */}
               <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-4">

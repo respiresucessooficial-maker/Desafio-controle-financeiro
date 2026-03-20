@@ -8,6 +8,29 @@ import { Bank } from '@/types';
 import { INSTITUTIONS, Institution } from '@/data/institutions';
 import InstitutionTile from '@/components/ui/InstitutionTile';
 import { formatCurrencyInput, parseCurrencyInput } from '@/lib/currencyInput';
+import { getInstitutionLogoSources } from '@/utils/logoSources';
+
+function InstitutionLogo({ inst }: { inst: Institution }) {
+  const sources = getInstitutionLogoSources(inst);
+  const [idx, setIdx] = useState(0);
+  const failed = idx >= sources.length;
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white shadow dark:bg-white/90">
+      {!failed && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={sources[idx]}
+          alt={inst.name}
+          width={24}
+          height={24}
+          className="h-6 w-6 object-contain"
+          onError={() => setIdx((i) => i + 1)}
+        />
+      )}
+      {failed && <CreditCard size={16} className="text-slate-400" />}
+    </div>
+  );
+}
 
 function DayStepper({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const num = parseInt(value) || 0;
@@ -369,10 +392,7 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
 
                     {selectedId !== 'outro' && inst && (
                       <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 dark:border-white/8 dark:bg-white/5">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white shadow dark:bg-white/90">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={inst.logo} alt={inst.name} width={24} height={24} className="h-6 w-6 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        </div>
+                        <InstitutionLogo inst={inst} />
                         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{inst.name}</span>
                         <span className="ml-auto shrink-0 font-mono text-xs text-slate-400">COMPE {inst.code}</span>
                       </div>

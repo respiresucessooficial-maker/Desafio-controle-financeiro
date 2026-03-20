@@ -61,7 +61,7 @@ const typeOptions: SelectOption[] = [
 ];
 
 const categoryOptions: SelectOption[] = [
-  { value: '', label: 'Todas as categorias' },
+  { value: 'all', label: 'Todas as categorias' },
   ...CATEGORIES.map((c) => ({ value: c.name, label: c.name, color: c.color })),
 ];
 
@@ -77,7 +77,7 @@ export default function TransactionsPage() {
 
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<Period>('month');
-  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [page, setPage] = useState(1);
   const [editTx, setEditTx] = useState<Transaction | undefined>();
@@ -89,7 +89,7 @@ export default function TransactionsPage() {
   const activeFilterCount = [
     search !== '',
     typeFilter !== 'all',
-    categoryFilter !== '',
+    categoryFilter !== 'all',
     period !== 'month',
   ].filter(Boolean).length;
 
@@ -107,7 +107,7 @@ export default function TransactionsPage() {
             return false;
         }
         if (typeFilter !== 'all' && t.type !== typeFilter) return false;
-        if (categoryFilter && t.category !== categoryFilter) return false;
+        if (categoryFilter !== 'all' && t.category !== categoryFilter) return false;
         if (search && !t.label.toLowerCase().includes(search.toLowerCase())) return false;
         return true;
       })
@@ -141,7 +141,7 @@ export default function TransactionsPage() {
   function resetFilters() {
     setSearch('');
     setPeriod('month');
-    setCategoryFilter('');
+    setCategoryFilter('all');
     setTypeFilter('all');
     setPage(1);
   }
@@ -335,11 +335,11 @@ export default function TransactionsPage() {
                     onRemove={() => setTypeFilter('all')}
                   />
                 )}
-                {categoryFilter && (
+                {categoryFilter !== 'all' && (
                   <FilterPill
                     label={categoryFilter}
                     color={CATEGORIES.find((c) => c.name === categoryFilter)?.color}
-                    onRemove={() => setCategoryFilter('')}
+                    onRemove={() => setCategoryFilter('all')}
                   />
                 )}
               </div>

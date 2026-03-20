@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -26,7 +26,6 @@ const navItems = [
   { icon: Home, label: 'Dashboard', href: '/dashboard' },
   { icon: Wallet, label: 'Cartoes', href: '/cards' },
   { icon: ArrowLeftRight, label: 'Extrato', href: '/transactions' },
-  { icon: PieChart, label: 'Analise', href: '/analytics' },
   { icon: Target, label: 'Orcamento', href: '/budget' },
   { icon: LayoutGrid, label: 'Metas', href: '/goals' },
   { icon: CalendarDays, label: 'Calendario', href: '/calendar' },
@@ -38,6 +37,18 @@ export default function Sidebar() {
   const { isDark } = useTheme();
   const { user, avatarUrl, signOut } = useAuth();
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const logoSrc = isDark ? '/Logo-loading-branca.png' : '/Logo-loading-preta.png';
   const displayName =
@@ -162,33 +173,49 @@ export default function Sidebar() {
       </nav>
 
       <div className="border-t border-slate-100 px-3 py-4 dark:border-white/6">
-        <div className="group flex items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-white/5">
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-500 text-xs font-bold text-white">
-            {avatarUrl && avatarUrl !== failedAvatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarUrl}
-                alt={displayName}
-                className="h-full w-full object-cover"
-                onError={() => setFailedAvatarUrl(avatarUrl)}
-              />
-            ) : (
-              <User size={16} className="text-white/95" strokeWidth={2.2} />
-            )}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{displayName}</p>
-            <p className="truncate text-[10px] text-slate-400">{user?.email}</p>
-          </div>
-
+        <div ref={profileRef} className="relative">
           <button
-            onClick={signOut}
-            title="Sair"
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-300 opacity-0 transition-colors hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 dark:text-slate-600 dark:hover:bg-red-500/10"
+            onClick={() => setProfileOpen((o) => !o)}
+            className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
           >
-            <LogOut size={13} />
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-500 text-xs font-bold text-white">
+              {avatarUrl && avatarUrl !== failedAvatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarUrl}
+                  alt={displayName}
+                  className="h-full w-full object-cover"
+                  onError={() => setFailedAvatarUrl(avatarUrl)}
+                />
+              ) : (
+                <User size={16} className="text-white/95" strokeWidth={2.2} />
+              )}
+            </div>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{displayName}</p>
+              <p className="truncate text-[10px] text-slate-400">{user?.email}</p>
+            </div>
           </button>
+
+          <AnimatePresence>
+            {profileOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                transition={{ duration: 0.15 }}
+                className="absolute bottom-full left-0 right-0 mb-2 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-lg dark:border-white/8 dark:bg-card"
+              >
+                <button
+                  onClick={() => { setProfileOpen(false); signOut(); }}
+                  className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10"
+                >
+                  <LogOut size={15} />
+                  Sair da conta
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </aside>

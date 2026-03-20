@@ -5,6 +5,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Pointer cursor on all interactive elements */
+button,
+a,
+[role="button"],
+[role="link"],
+[role="tab"],
+[role="menuitem"],
+label[for],
+select,
+summary {
+  cursor: pointer;
+}
+
 /* Smooth dark/light mode transition — only color properties, not transform/opacity (preserves Framer Motion) */
 :root {
   color-scheme: light dark;

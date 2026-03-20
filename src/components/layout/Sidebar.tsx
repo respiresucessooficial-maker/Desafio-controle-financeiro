@@ -24,7 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const navItems = [
   { icon: Home, label: 'Dashboard', href: '/dashboard' },
-  { icon: Wallet, label: 'Cartoes', href: '/cards' },
+  { icon: Wallet, label: 'Contas & Cartões', href: '/cards' },
   { icon: ArrowLeftRight, label: 'Extrato', href: '/transactions' },
   { icon: Target, label: 'Orcamento', href: '/budget' },
   { icon: LayoutGrid, label: 'Metas', href: '/goals' },
@@ -66,7 +66,7 @@ export default function Sidebar() {
             width={236}
             height={60}
             priority
-            className="h-[3.35rem] w-auto object-contain"
+            className="h-16 w-auto object-contain"
           />
         </Link>
       </div>

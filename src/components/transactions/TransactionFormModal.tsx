@@ -10,6 +10,7 @@ import {
 import { Transaction } from '@/types';
 import { CATEGORIES } from '@/data/categories';
 import { useAppData } from '@/contexts/AppDataContext';
+import { formatCurrencyInput, parseCurrencyInput } from '@/lib/currencyInput';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   ShoppingCart, Home, Car, Tv, Heart, TrendingUp, BarChart2, BookOpen, Package,
@@ -69,7 +70,7 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
         setForm({
           type: editTransaction.type,
           label: editTransaction.label,
-          amount: String(Math.abs(editTransaction.amount)),
+          amount: formatCurrencyInput(String(Math.abs(editTransaction.amount))),
           category: editTransaction.category,
           date: editTransaction.date,
           bankId: editTransaction.bankId ?? '',
@@ -100,7 +101,7 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const amt = parseFloat(form.amount.replace(',', '.'));
+    const amt = parseCurrencyInput(form.amount);
     if (!form.label || isNaN(amt) || amt <= 0) return;
 
     const finalAmt = form.type === 'expense' ? -Math.abs(amt) : Math.abs(amt);
@@ -306,11 +307,10 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
                   <div className="flex-1 flex items-center gap-1.5 min-w-0">
                     <span className="text-sm font-semibold text-slate-400 dark:text-slate-500 shrink-0">R$</span>
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                      type="text"
+                      inputMode="decimal"
                       value={form.amount}
-                      onChange={(e) => set('amount', e.target.value)}
+                      onChange={(e) => set('amount', formatCurrencyInput(e.target.value))}
                       placeholder="0,00"
                       required
                       className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none"

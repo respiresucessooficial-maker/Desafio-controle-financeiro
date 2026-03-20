@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -15,58 +16,52 @@ import {
   Target,
   Bell,
   CalendarDays,
+  User,
 } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 
 const navItems = [
-  { icon: Home,           label: 'Dashboard',  href: '/dashboard' },
-  { icon: Wallet,         label: 'Cartões',    href: '/cards' },
-  { icon: ArrowLeftRight, label: 'Extrato',    href: '/transactions' },
-  { icon: PieChart,       label: 'Análise',    href: '/analytics' },
-  { icon: Target,         label: 'Orçamento',  href: '/budget' },
-  { icon: LayoutGrid,     label: 'Metas',      href: '/goals' },
-  { icon: CalendarDays,   label: 'Calendário', href: '/calendar' },
+  { icon: Home, label: 'Dashboard', href: '/dashboard' },
+  { icon: Wallet, label: 'Cartoes', href: '/cards' },
+  { icon: ArrowLeftRight, label: 'Extrato', href: '/transactions' },
+  { icon: PieChart, label: 'Analise', href: '/analytics' },
+  { icon: Target, label: 'Orcamento', href: '/budget' },
+  { icon: LayoutGrid, label: 'Metas', href: '/goals' },
+  { icon: CalendarDays, label: 'Calendario', href: '/calendar' },
 ];
 
 export default function Sidebar() {
-  const pathname  = usePathname();
+  const pathname = usePathname();
   const { count } = useNotifications();
   const { isDark } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, avatarUrl, signOut } = useAuth();
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
 
-  const logoSrc    = isDark ? '/Logo-loading-branca.png' : '/Logo-loading-preta.png';
-  const initials   = (user?.user_metadata?.full_name as string | undefined)
-    ?.split(' ')
-    .map((n: string) => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? '?';
-  const displayName = (user?.user_metadata?.full_name as string | undefined)
-    ?? user?.email?.split('@')[0]
-    ?? 'Usuário';
+  const logoSrc = isDark ? '/Logo-loading-branca.png' : '/Logo-loading-preta.png';
+  const displayName =
+    (user?.user_metadata?.full_name as string | undefined) ??
+    user?.email?.split('@')[0] ??
+    'Usuario';
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-56 bg-white dark:bg-card z-50 flex flex-col border-r border-slate-100 dark:border-white/8">
-
-      {/* Logo */}
-      <div className="px-5 py-5 border-b border-slate-100 dark:border-white/6">
-        <Link href="/dashboard">
+    <aside className="fixed left-0 top-0 z-50 flex h-full w-56 flex-col border-r border-slate-100 bg-white dark:border-white/8 dark:bg-card">
+      <div className="flex justify-center border-b border-slate-100 px-4 pb-4 pt-3 dark:border-white/6">
+        <Link href="/dashboard" className="flex w-full items-center justify-center">
           <Image
             src={logoSrc}
             alt="Logo"
-            width={160}
-            height={36}
+            width={236}
+            height={60}
             priority
-            className="object-contain h-8 w-auto"
+            className="h-[3.35rem] w-auto object-contain"
           />
         </Link>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
-        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-3 mb-2">
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
+        <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-600">
           Menu
         </p>
         {navItems.map(({ icon: Icon, label, href }) => {
@@ -74,49 +69,43 @@ export default function Sidebar() {
           return (
             <Link key={href} href={href}>
               <div
-                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+                className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all ${
                   isActive
-                    ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-100'
+                    ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-100'
                 }`}
               >
                 {isActive && (
                   <motion.div
                     layoutId="activeBar"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-amber-500 rounded-r-full"
+                    className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-amber-500"
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
-                <Icon
-                  size={17}
-                  strokeWidth={isActive ? 2.5 : 2}
-                  className="flex-shrink-0"
-                />
-                <span className={`text-sm font-medium ${isActive ? 'font-semibold' : ''}`}>
-                  {label}
-                </span>
+                <Icon size={17} strokeWidth={isActive ? 2.5 : 2} className="flex-shrink-0" />
+                <span className={`text-sm font-medium ${isActive ? 'font-semibold' : ''}`}>{label}</span>
               </div>
             </Link>
           );
         })}
 
-        {/* Notifications */}
-        <div className="mt-1 pt-3 border-t border-slate-100 dark:border-white/6">
-          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-3 mb-2">
+        <div className="mt-1 border-t border-slate-100 pt-3 dark:border-white/6">
+          <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-600">
             Sistema
           </p>
+
           <Link href="/notifications">
             <div
-              className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+              className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all ${
                 pathname === '/notifications'
-                  ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-100'
+                  ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-100'
               }`}
             >
               {pathname === '/notifications' && (
                 <motion.div
                   layoutId="activeBar"
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-amber-500 rounded-r-full"
+                  className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-amber-500"
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
               )}
@@ -126,9 +115,11 @@ export default function Sidebar() {
                   {count > 0 && (
                     <motion.span
                       key={count}
-                      initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
                       transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                      className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-amber-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center"
+                      className="absolute -right-1.5 -top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white"
                     >
                       {count > 9 ? '9+' : count}
                     </motion.span>
@@ -136,10 +127,10 @@ export default function Sidebar() {
                 </AnimatePresence>
               </div>
               <span className={`text-sm font-medium ${pathname === '/notifications' ? 'font-semibold' : ''}`}>
-                Notificações
+                Notificacoes
               </span>
               {count > 0 && (
-                <span className="ml-auto text-[10px] font-bold bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full">
+                <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
                   {count}
                 </span>
               )}
@@ -148,43 +139,53 @@ export default function Sidebar() {
 
           <Link href="/settings">
             <div
-              className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all mt-0.5 ${
+              className={`relative mt-0.5 flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all ${
                 pathname === '/settings'
-                  ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-100'
+                  ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-100'
               }`}
             >
               {pathname === '/settings' && (
                 <motion.div
                   layoutId="activeBar"
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-amber-500 rounded-r-full"
+                  className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-amber-500"
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
               )}
               <Settings size={17} strokeWidth={pathname === '/settings' ? 2.5 : 2} className="flex-shrink-0" />
               <span className={`text-sm font-medium ${pathname === '/settings' ? 'font-semibold' : ''}`}>
-                Configurações
+                Configuracoes
               </span>
             </div>
           </Link>
         </div>
       </nav>
 
-      {/* User + logout */}
-      <div className="px-3 py-4 border-t border-slate-100 dark:border-white/6">
-        <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
-          {/* Avatar */}
-          <div className="w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            {initials}
+      <div className="border-t border-slate-100 px-3 py-4 dark:border-white/6">
+        <div className="group flex items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-white/5">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-500 text-xs font-bold text-white">
+            {avatarUrl && avatarUrl !== failedAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt={displayName}
+                className="h-full w-full object-cover"
+                onError={() => setFailedAvatarUrl(avatarUrl)}
+              />
+            ) : (
+              <User size={16} className="text-white/95" strokeWidth={2.2} />
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{displayName}</p>
-            <p className="text-[10px] text-slate-400 truncate">{user?.email}</p>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{displayName}</p>
+            <p className="truncate text-[10px] text-slate-400">{user?.email}</p>
           </div>
+
           <button
             onClick={signOut}
             title="Sair"
-            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-300 opacity-0 transition-colors hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 dark:text-slate-600 dark:hover:bg-red-500/10"
           >
             <LogOut size={13} />
           </button>

@@ -8,7 +8,7 @@ import {
   useCallback,
   useRef,
 } from 'react';
-import { Transaction, Budget, Bank, Goal, Account } from '@/types';
+import { Transaction, Budget, Bank, Goal, Account, GoalContribution } from '@/types';
 import { getCategoryDef } from '@/data/categories';
 import { INSTITUTIONS } from '@/data/institutions';
 import { supabase } from '@/lib/supabase';
@@ -20,6 +20,48 @@ function hydrateNetworks(banks: Bank[]): Bank[] {
     const inst = INSTITUTIONS.find((i) => i.code === bank.code && i.code !== '000');
     return inst ? { ...bank, network: inst.network } : bank;
   });
+}
+
+function normalizeBudgetCategory(category: string) {
+  return category.trim().toLowerCase();
+}
+
+function dedupeBudgetsByCategory(items: Budget[]): Budget[] {
+  const map = new Map<string, Budget>();
+  items.forEach((budget) => {
+    map.set(normalizeBudgetCategory(budget.category), budget);
+  });
+  return Array.from(map.values());
+}
+
+function goalHistoryStorageKey(uid: string) {
+  return `goal-history:${uid}`;
+}
+
+function readGoalHistory(uid: string) {
+  if (typeof window === 'undefined' || !uid) return {} as Record<string, GoalContribution[]>;
+  try {
+    const raw = window.localStorage.getItem(goalHistoryStorageKey(uid));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, GoalContribution[]>;
+    return parsed ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function writeGoalHistory(uid: string, goalId: string, history: GoalContribution[]) {
+  if (typeof window === 'undefined' || !uid) return;
+  const current = readGoalHistory(uid);
+  current[goalId] = history;
+  window.localStorage.setItem(goalHistoryStorageKey(uid), JSON.stringify(current));
+}
+
+function removeGoalHistory(uid: string, goalId: string) {
+  if (typeof window === 'undefined' || !uid) return;
+  const current = readGoalHistory(uid);
+  delete current[goalId];
+  window.localStorage.setItem(goalHistoryStorageKey(uid), JSON.stringify(current));
 }
 
 // ── ID generation ─────────────────────────────────────────────────────────────
@@ -108,6 +150,13 @@ function rowToGoal(r: any): Goal {
   return {
     id: r.id, name: r.name, current: Number(r.current), target: Number(r.target),
     icon: r.icon, color: r.color, description: r.description,
+    history: Array.isArray(r.history)
+      ? r.history.map((entry: any): GoalContribution => ({
+          id: entry.id,
+          amount: Number(entry.amount),
+          createdAt: entry.createdAt,
+        }))
+      : [],
   };
 }
 function goalToRow(g: Goal, userId: string) {
@@ -182,9 +231,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (goalErr)   console.error('[loadForUser] goals:',        goalErr);
     if (accErr)    console.error('[loadForUser] accounts:',     accErr);
     setTransactions((txData ?? []).map(rowToTransaction));
-    setBudgets((budgetData ?? []).map(rowToBudget));
+    setBudgets(dedupeBudgetsByCategory((budgetData ?? []).map(rowToBudget)));
     setBanks(hydrateNetworks((bankData ?? []).map(rowToBank)));
-    setGoals((goalData ?? []).map(rowToGoal));
+    const localGoalHistory = readGoalHistory(uid);
+    setGoals(
+      (goalData ?? []).map(rowToGoal).map((goal) => ({
+        ...goal,
+        history: localGoalHistory[goal.id] ?? goal.history ?? [],
+      })),
+    );
     setAccounts((accData ?? []).map(rowToAccount));
     setLoaded(true);
   }
@@ -242,26 +297,32 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   // ── Budgets ────────────────────────────────────────────────────────────────
   const setBudget = useCallback((b: Omit<Budget, 'id'>) => {
     setBudgets((prev) => {
-      const exists = prev.find((x) => x.category === b.category);
+      const normalized = normalizeBudgetCategory(b.category);
+      const exists = prev.find((x) => normalizeBudgetCategory(x.category) === normalized);
       if (exists) {
         supabase.from('budgets').update({ limit_amount: b.limit, color: b.color })
           .eq('id', exists.id).eq('user_id', userId.current)
           .then(({ error }) => { if (error) console.error('[updateBudget]', error); });
-        return prev.map((x) => (x.category === b.category ? { ...x, ...b } : x));
+        return dedupeBudgetsByCategory(
+          prev.map((x) => (
+            normalizeBudgetCategory(x.category) === normalized ? { ...x, ...b } : x
+          )),
+        );
       }
       const newB = { ...b, id: genId() };
       supabase.from('budgets').insert(budgetToRow(newB, userId.current))
         .then(({ error }) => { if (error) console.error('[addBudget]', error); });
-      return [...prev, newB];
+      return dedupeBudgetsByCategory([...prev, newB]);
     });
   }, []);
 
   const deleteBudget = useCallback((category: string) => {
     setBudgets((prev) => {
-      const target = prev.find((b) => b.category === category);
+      const normalized = normalizeBudgetCategory(category);
+      const target = prev.find((b) => normalizeBudgetCategory(b.category) === normalized);
       if (target) supabase.from('budgets').delete().eq('id', target.id).eq('user_id', userId.current)
         .then(({ error }) => { if (error) console.error('[deleteBudget]', error); });
-      return prev.filter((b) => b.category !== category);
+      return prev.filter((b) => normalizeBudgetCategory(b.category) !== normalized);
     });
   }, []);
 
@@ -306,8 +367,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Goals ──────────────────────────────────────────────────────────────────
   const addGoal = useCallback((g: Omit<Goal, 'id'>) => {
-    const newG: Goal = { ...g, id: genId() };
+    const newG: Goal = { ...g, id: genId(), history: g.history ?? [] };
     setGoals((prev) => [...prev, newG]);
+    writeGoalHistory(userId.current, newG.id, newG.history ?? []);
     supabase.from('goals').insert(goalToRow(newG, userId.current))
       .then(({ error }) => { if (error) console.error('[addGoal]', error); });
   }, []);
@@ -321,6 +383,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if ('icon'        in data) row.icon        = data.icon;
     if ('color'       in data) row.color       = data.color;
     if ('description' in data) row.description = data.description;
+    if ('history'     in data) writeGoalHistory(userId.current, id, data.history ?? []);
     if (Object.keys(row).length > 0)
       supabase.from('goals').update(row).eq('id', id).eq('user_id', userId.current)
         .then(({ error }) => { if (error) console.error('[updateGoal]', error); });
@@ -328,6 +391,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const deleteGoal = useCallback((id: string) => {
     setGoals((prev) => prev.filter((g) => g.id !== id));
+    removeGoalHistory(userId.current, id);
     supabase.from('goals').delete().eq('id', id).eq('user_id', userId.current)
       .then(({ error }) => { if (error) console.error('[deleteGoal]', error); });
   }, []);

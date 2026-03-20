@@ -77,6 +77,7 @@ create table if not exists goals (
   icon        text not null,
   color       text not null,
   description text not null,
+  history     jsonb not null default '[]'::jsonb,
   created_at  timestamptz default now()
 );
 

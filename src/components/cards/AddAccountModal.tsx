@@ -8,6 +8,7 @@ import { Account, AccountType } from '@/types';
 import { INSTITUTIONS } from '@/data/institutions';
 import InstitutionTile from '@/components/ui/InstitutionTile';
 import { ACCOUNT_TYPES } from '@/data/accountTypes';
+import { formatCurrencyInput, parseCurrencyInput } from '@/lib/currencyInput';
 
 const emptyForm = {
   type: 'corrente' as AccountType,
@@ -36,7 +37,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
       setSelectedId(editAccount.institutionId ?? '');
       setForm({
         type: editAccount.type,
-        balance: String(editAccount.balance),
+        balance: formatCurrencyInput(String(editAccount.balance)),
         agency: (editAccount.agency ?? '').slice(-2),
         accountNumber: (editAccount.accountNumber ?? '').slice(-3),
       });
@@ -65,7 +66,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!inst) return;
-    const balance = parseFloat(form.balance.replace(/\./g, '').replace(',', '.'));
+    const balance = parseCurrencyInput(form.balance);
     if (isNaN(balance)) return;
 
     const data = {
@@ -247,7 +248,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
                         type="text"
                         inputMode="decimal"
                         value={form.balance}
-                        onChange={(e) => set('balance', e.target.value)}
+                        onChange={(e) => set('balance', formatCurrencyInput(e.target.value))}
                         placeholder="1.000,00"
                         required
                         className={`${inputCls} font-bold`}

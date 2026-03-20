@@ -4,12 +4,13 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Plane, TrendingUp, Plus, Target, Home, Car, Briefcase,
-  GraduationCap, Heart, Palmtree, Pencil, Trash2, X, Check,
+  GraduationCap, Heart, Palmtree, Pencil, Trash2, X, Check, CheckCircle2,
 } from 'lucide-react';
 import { useAppData } from '@/contexts/AppDataContext';
 import { useFabAction } from '@/contexts/FabContext';
 import { Goal } from '@/types';
 import GoalDetailDrawer from '@/components/goals/GoalDetailDrawer';
+import { formatCurrencyInput, parseCurrencyInput } from '@/lib/currencyInput';
 
 const ICON_OPTIONS = [
   { value: 'Shield',       label: 'Reserva',       Icon: Shield },
@@ -58,8 +59,8 @@ function GoalFormModal({
   const { addGoal, updateGoal } = useAppData();
   const [name, setName]           = useState(editGoal?.name ?? '');
   const [description, setDesc]    = useState(editGoal?.description ?? '');
-  const [target, setTarget]       = useState(editGoal ? String(editGoal.target) : '');
-  const [current, setCurrent]     = useState(editGoal ? String(editGoal.current) : '0');
+  const [target, setTarget]       = useState(editGoal ? formatCurrencyInput(String(editGoal.target)) : '');
+  const [current, setCurrent]     = useState(editGoal ? formatCurrencyInput(String(editGoal.current)) : formatCurrencyInput('0'));
   const [icon, setIcon]           = useState(editGoal?.icon ?? 'Target');
   const [color, setColor]         = useState(editGoal?.color ?? '#F59E0B');
 
@@ -68,13 +69,21 @@ function GoalFormModal({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const t = parseFloat(target.replace(',', '.'));
-    const c = parseFloat(current.replace(',', '.'));
+    const t = parseCurrencyInput(target);
+    const c = parseCurrencyInput(current);
     if (isNaN(t) || t <= 0) return;
     if (isEditing) {
       updateGoal(editGoal.id, { name, description, target: t, current: Math.max(0, isNaN(c) ? 0 : c), icon, color });
     } else {
-      addGoal({ name, description, target: t, current: Math.max(0, isNaN(c) ? 0 : c), icon, color });
+      addGoal({
+        name,
+        description,
+        target: t,
+        current: Math.max(0, isNaN(c) ? 0 : c),
+        icon,
+        color,
+        history: [],
+      });
     }
     onClose();
   }
@@ -151,11 +160,10 @@ function GoalFormModal({
                     Valor objetivo (R$)
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="1"
+                    type="text"
+                    inputMode="decimal"
                     value={target}
-                    onChange={(e) => setTarget(e.target.value)}
+                    onChange={(e) => setTarget(formatCurrencyInput(e.target.value))}
                     placeholder="0,00"
                     required
                     className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-50 text-sm focus:outline-none focus:border-amber-400 transition-colors"
@@ -166,11 +174,10 @@ function GoalFormModal({
                     Já guardado (R$)
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="text"
+                    inputMode="decimal"
                     value={current}
-                    onChange={(e) => setCurrent(e.target.value)}
+                    onChange={(e) => setCurrent(formatCurrencyInput(e.target.value))}
                     placeholder="0,00"
                     className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-50 text-sm focus:outline-none focus:border-amber-400 transition-colors"
                   />
@@ -244,8 +251,9 @@ export default function GoalsPage() {
   const { goals, deleteGoal } = useAppData();
   const [modalOpen, setModalOpen] = useState(false);
   const [editGoal, setEditGoal] = useState<Goal | null>(null);
-  const [detailGoal, setDetailGoal] = useState<Goal | null>(null);
+  const [detailGoalId, setDetailGoalId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const detailGoal = detailGoalId ? goals.find((goal) => goal.id === detailGoalId) ?? null : null;
 
   useFabAction({ label: 'Nova meta', onClick: () => { setEditGoal(null); setModalOpen(true); } });
 
@@ -338,35 +346,41 @@ export default function GoalsPage() {
             const pct = Math.min((goal.current / goal.target) * 100, 100);
             const remaining = goal.target - goal.current;
             const isConfirming = confirmDelete === goal.id;
+            const isDone = remaining <= 0;
 
             return (
               <motion.div
                 key={goal.id}
                 variants={itemVariants}
-                onClick={() => setDetailGoal(goal)}
+                onClick={() => setDetailGoalId(goal.id)}
                 className="group bg-white dark:bg-card rounded-2xl p-6 border border-slate-100 dark:border-white/8 hover:shadow-md transition-shadow cursor-pointer"
               >
                 <div className="flex items-start gap-5">
-                  <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: goal.color + '18' }}
-                  >
-                    <Icon size={24} style={{ color: goal.color }} strokeWidth={2} />
-                  </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between mb-1">
-                      <div>
-                        <h3 className="text-base font-bold text-slate-900 dark:text-slate-50">{goal.name}</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">{goal.description}</p>
-                      </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-slate-900 dark:text-slate-50">{fmt(goal.current)}</p>
-                          <p className="text-xs text-slate-400">de {fmt(goal.target)}</p>
+                      <div className="flex items-start gap-4">
+                        <div
+                          className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: goal.color + '18' }}
+                        >
+                          <Icon size={24} style={{ color: goal.color }} strokeWidth={2} />
                         </div>
-                        {/* Actions */}
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-base font-bold text-slate-900 dark:text-slate-50">{goal.name}</h3>
+                            {isDone && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                                <CheckCircle2 size={14} />
+                                Meta atingida
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5">{goal.description}</p>
+                        </div>
+                      </div>
+                      <div className="ml-4 flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-1">
                           <motion.button
                             whileTap={{ scale: 0.9 }}
                             onClick={(e) => { e.stopPropagation(); openEdit(goal); }}
@@ -405,6 +419,17 @@ export default function GoalsPage() {
                             )}
                           </AnimatePresence>
                         </div>
+
+                        <div className="text-right">
+                          <div className="ml-auto inline-flex flex-col items-end rounded-2xl bg-slate-50 px-4 py-2 dark:bg-white/5">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                              Valor guardado
+                            </p>
+                            <p className="text-xl font-bold text-slate-900 dark:text-slate-50">
+                              {fmt(goal.current)}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -413,11 +438,13 @@ export default function GoalsPage() {
                         <span className="text-sm font-bold" style={{ color: goal.color }}>
                           {pct.toFixed(1)}%
                         </span>
-                        <span className="text-xs text-slate-400">
-                          {remaining > 0 ? `Faltam ${fmt(remaining)}` : 'Meta atingida!'}
-                        </span>
+                        {!isDone ? (
+                          <span className="text-xs text-slate-400">
+                            Faltam {fmt(remaining)}
+                          </span>
+                        ) : <span />}
                       </div>
-                      <div className="h-3 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-3 rounded-full overflow-hidden bg-slate-100 dark:bg-white/10">
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${pct}%` }}
@@ -441,12 +468,14 @@ export default function GoalsPage() {
         editGoal={editGoal}
       />
 
-      <GoalDetailDrawer
-        goal={detailGoal}
-        onClose={() => setDetailGoal(null)}
-        onEdit={(g) => { setDetailGoal(null); openEdit(g); }}
-        onDelete={(id) => { setDetailGoal(null); handleDelete(id); }}
-      />
+      {detailGoal && (
+        <GoalDetailDrawer
+          goal={detailGoal}
+          onClose={() => setDetailGoalId(null)}
+          onEdit={(g) => { setDetailGoalId(null); openEdit(g); }}
+          onDelete={(id) => { setDetailGoalId(null); handleDelete(id); }}
+        />
+      )}
     </>
   );
 }

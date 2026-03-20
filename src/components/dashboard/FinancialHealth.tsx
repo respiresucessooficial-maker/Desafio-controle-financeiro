@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingDown, TrendingUp } from 'lucide-react';
 import { useAppData } from '@/contexts/AppDataContext';
 
 const R = 52;
@@ -11,6 +11,10 @@ const CIRCUMFERENCE = 2 * Math.PI * R;
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
+interface FinancialHealthProps {
+  showTitle?: boolean;
+}
+
 function scoreColor(score: number) {
   if (score <= 30) return '#EF4444';
   if (score <= 50) return '#F97316';
@@ -18,7 +22,7 @@ function scoreColor(score: number) {
   return '#10B981';
 }
 
-export default function FinancialHealth() {
+export default function FinancialHealth({ showTitle = true }: FinancialHealthProps) {
   const { transactions } = useAppData();
   const [progress, setProgress] = useState(0);
 
@@ -39,31 +43,30 @@ export default function FinancialHealth() {
     ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100
     : 0;
 
-  // Score: based on savings rate (0–100)
-  const SCORE = Math.min(100, Math.max(0, Math.round(savingsRate)));
+  const score = Math.min(100, Math.max(0, Math.round(savingsRate)));
 
   useEffect(() => {
-    const t = setTimeout(() => setProgress(SCORE), 300);
+    const t = setTimeout(() => setProgress(score), 300);
     return () => clearTimeout(t);
-  }, [SCORE]);
+  }, [score]);
 
-  const color = scoreColor(SCORE);
+  const color = scoreColor(score);
   const dashOffset = CIRCUMFERENCE - (progress / 100) * CIRCUMFERENCE;
 
   const insights = [
-    { label: 'Renda mensal',     value: fmt(monthlyIncome),   trend: 'up'   as const },
-    { label: 'Gastos mensais',   value: fmt(monthlyExpenses), trend: 'down' as const },
-    { label: 'Taxa de poupança', value: `${savingsRate.toFixed(1)}%`, trend: savingsRate >= 0 ? 'up' as const : 'down' as const },
+    { label: 'Renda mensal', value: fmt(monthlyIncome), trend: 'up' as const },
+    { label: 'Gastos mensais', value: fmt(monthlyExpenses), trend: 'down' as const },
+    { label: 'Taxa de poupanca', value: `${savingsRate.toFixed(1)}%`, trend: savingsRate >= 0 ? 'up' as const : 'down' as const },
   ];
 
   return (
-    <div className="bg-white dark:bg-card rounded-2xl p-5 border border-slate-100 dark:border-white/8 flex flex-col">
-      <h2 className="text-sm font-bold text-slate-900 dark:text-slate-50 mb-4">Saúde Financeira</h2>
+    <div className="w-full rounded-2xl border border-slate-100 bg-white p-5 dark:bg-card dark:border-white/8 flex flex-col">
+      {showTitle && (
+        <h2 className="mb-4 text-sm font-bold text-slate-900 dark:text-slate-50">Saude Financeira</h2>
+      )}
 
-      <div className="flex items-center gap-5 flex-1">
-
-        {/* ── Gauge ── */}
-        <div className="relative shrink-0 flex items-center justify-center">
+      <div className="flex flex-1 items-center gap-5">
+        <div className="relative flex shrink-0 items-center justify-center">
           <svg width="130" height="130" viewBox="0 0 130 130">
             <defs>
               <linearGradient id="healthGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -71,17 +74,19 @@ export default function FinancialHealth() {
                 <stop offset="100%" stopColor={color} stopOpacity="0.7" />
               </linearGradient>
             </defs>
-            {/* Track */}
             <circle
-              cx="65" cy="65" r={R}
+              cx="65"
+              cy="65"
+              r={R}
               fill="none"
               stroke="currentColor"
               strokeWidth="10"
               className="text-slate-100 dark:text-white/8"
             />
-            {/* Arc */}
             <motion.circle
-              cx="65" cy="65" r={R}
+              cx="65"
+              cy="65"
+              r={R}
               fill="none"
               stroke="url(#healthGrad)"
               strokeWidth="10"
@@ -94,7 +99,6 @@ export default function FinancialHealth() {
             />
           </svg>
 
-          {/* Score text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <motion.span
               className="text-3xl font-bold leading-none"
@@ -103,13 +107,12 @@ export default function FinancialHealth() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.5 }}
             >
-              {SCORE}
+              {score}
             </motion.span>
-            <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">/ 100</span>
+            <span className="mt-0.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">/ 100</span>
           </div>
         </div>
 
-        {/* ── Metrics ── */}
         <div className="flex flex-col gap-2">
           {insights.map((item, i) => (
             <motion.div
@@ -119,29 +122,30 @@ export default function FinancialHealth() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 + i * 0.1 }}
             >
-              {/* Icon pill */}
-              <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
-                item.trend === 'up'
-                  ? 'bg-emerald-500/15 dark:bg-emerald-500/20'
-                  : 'bg-red-500/15 dark:bg-red-500/20'
-              }`}>
-                {item.trend === 'up'
-                  ? <TrendingUp size={11} className="text-emerald-500" />
-                  : <TrendingDown size={11} className="text-red-500" />
-                }
+              <div
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${
+                  item.trend === 'up'
+                    ? 'bg-emerald-500/15 dark:bg-emerald-500/20'
+                    : 'bg-red-500/15 dark:bg-red-500/20'
+                }`}
+              >
+                {item.trend === 'up' ? (
+                  <TrendingUp size={11} className="text-emerald-500" />
+                ) : (
+                  <TrendingDown size={11} className="text-red-500" />
+                )}
               </div>
 
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
+              <span className="whitespace-nowrap text-xs font-medium text-slate-600 dark:text-slate-300">
                 {item.label}
               </span>
 
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap ml-3">
+              <span className="ml-3 whitespace-nowrap text-xs font-bold text-slate-800 dark:text-slate-100">
                 {item.value}
               </span>
             </motion.div>
           ))}
         </div>
-
       </div>
     </div>
   );

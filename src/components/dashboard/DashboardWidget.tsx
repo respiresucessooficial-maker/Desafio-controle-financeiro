@@ -1,6 +1,6 @@
 'use client';
 
-import { Reorder, motion } from 'framer-motion';
+import { Reorder } from 'framer-motion';
 import { Eye, EyeOff, GripVertical } from 'lucide-react';
 import { WidgetConfig } from '@/types';
 
@@ -19,7 +19,7 @@ export default function DashboardWidget({ widget, onToggle, isEditMode, children
   return (
     <Reorder.Item
       value={widget}
-      className={`relative rounded-2xl transition-opacity ${
+      className={`w-full rounded-2xl transition-opacity ${
         widget.visible ? 'opacity-100' : 'opacity-50'
       }`}
       whileDrag={{
@@ -28,8 +28,8 @@ export default function DashboardWidget({ widget, onToggle, isEditMode, children
         zIndex: 50,
       }}
     >
-      {/* Edit mode overlay bar */}
-      <div className="absolute -top-2 left-0 right-0 z-10 flex items-center justify-between px-3 py-1.5 bg-slate-800 dark:bg-slate-700 rounded-2xl shadow-lg">
+      {/* Edit mode header */}
+      <div className="mb-3 flex items-center justify-between px-3 py-2 bg-slate-800 dark:bg-slate-700 rounded-2xl shadow-lg">
         <div className="flex items-center gap-2 cursor-grab active:cursor-grabbing text-slate-300">
           <GripVertical size={15} />
           <span className="text-xs font-semibold text-slate-200">{widget.label}</span>
@@ -46,7 +46,7 @@ export default function DashboardWidget({ widget, onToggle, isEditMode, children
       </div>
 
       {/* Content (or placeholder when hidden) */}
-      <div className="mt-6">
+      <div className="w-full">
         {widget.visible ? (
           children
         ) : (

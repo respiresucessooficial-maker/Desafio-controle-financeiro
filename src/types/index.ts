@@ -59,6 +59,12 @@ export interface Budget {
   color: string;
 }
 
+export interface GoalContribution {
+  id: string;
+  amount: number;
+  createdAt: string;
+}
+
 export interface Goal {
   id: string;
   name: string;
@@ -67,6 +73,7 @@ export interface Goal {
   icon: string;
   color: string;
   description: string;
+  history?: GoalContribution[];
 }
 
 export interface MonthlyData {

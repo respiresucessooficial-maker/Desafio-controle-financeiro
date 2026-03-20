@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { ChangeEvent, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, Smartphone, Shield, Globe, Moon,
   ChevronRight, Camera, Mail, Phone,
-  ChevronDown, AlertTriangle, Trash2, X,
+  ChevronDown, AlertTriangle, Trash2, X, User,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useFabAction } from '@/contexts/FabContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ToggleProps {
   enabled: boolean;
@@ -205,18 +206,53 @@ function DeleteStep2({ onDelete, onClose }: { onDelete: () => void; onClose: () 
 export default function SettingsPage() {
   useFabAction({ label: '', onClick: () => {}, hidden: true });
   const { isDark, toggle: toggleTheme } = useTheme();
+  const { user, avatarUrl, setAvatarUrl } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [mobileAccess, setMobileAccess]   = useState(true);
   const [emailAlerts, setEmailAlerts]     = useState(false);
   const [biometrics, setBiometrics]       = useState(true);
   const [dangerOpen, setDangerOpen]       = useState(false);
   const [deleteStep, setDeleteStep]       = useState<0 | 1 | 2>(0);
+  const [avatarFeedback, setAvatarFeedback] = useState('');
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const fullName = (user?.user_metadata?.full_name as string | undefined)?.trim()
+    || user?.email?.split('@')[0]
+    || 'Usuario';
+  const email = user?.email ?? 'Sem email';
+  const phone = (user?.user_metadata?.phone as string | undefined)?.trim() || 'Nao informado';
+  const planLabel = (user?.user_metadata?.plan as string | undefined)?.trim() || 'Plano Premium';
+  const planBadge = planLabel.replace(/^Plano\s+/i, '');
 
   function handleDelete() {
     localStorage.clear();
     setDeleteStep(0);
     // Reload to reset app state
     window.location.reload();
+  }
+
+  function handleAvatarSelect(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setAvatarFeedback('Selecione uma imagem valida.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const result = typeof reader.result === 'string' ? reader.result : null;
+      if (!result) {
+        setAvatarFeedback('Nao foi possivel ler essa imagem.');
+        return;
+      }
+      setFailedAvatarUrl(null);
+      await setAvatarUrl(result);
+      setAvatarFeedback('Foto de perfil atualizada.');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   }
 
   return (
@@ -238,37 +274,60 @@ export default function SettingsPage() {
           <h2 className="text-base font-bold text-slate-900 dark:text-slate-50 mb-5">Perfil</h2>
           <div className="flex items-center gap-5">
             <div className="relative">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg">
-                <span className="text-2xl font-bold text-white">TM</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarSelect}
+                className="hidden"
+              />
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg overflow-hidden">
+                {avatarUrl && avatarUrl !== failedAvatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatarUrl}
+                    alt={fullName}
+                    className="h-full w-full object-cover"
+                    onError={() => setFailedAvatarUrl(avatarUrl)}
+                  />
+                ) : (
+                  <User size={30} className="text-white/95" strokeWidth={2.2} />
+                )}
               </div>
               <motion.button
                 whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
+                onClick={() => fileInputRef.current?.click()}
                 className="absolute -bottom-1 -right-1 w-7 h-7 rounded-xl bg-white dark:bg-card border-2 border-slate-100 dark:border-white/10 flex items-center justify-center shadow-sm text-slate-500 dark:text-slate-400 hover:text-amber-500 transition-colors"
               >
                 <Camera size={12} />
               </motion.button>
             </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-50">Tiago Meconi</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Plano Premium</p>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-50">{fullName}</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{planLabel}</p>
               <span className="inline-flex items-center mt-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-semibold px-2.5 py-1 rounded-full">
-                Premium
+                {planBadge}
               </span>
             </div>
           </div>
+          {avatarFeedback && (
+            <p className="mt-3 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              {avatarFeedback}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-4 mt-6">
             <div className="flex items-center gap-3 p-3.5 bg-slate-50 dark:bg-white/5 rounded-2xl">
               <Mail size={16} className="text-slate-400" />
               <div>
                 <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Email</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">tiago@exemplo.com</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{email}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-3.5 bg-slate-50 dark:bg-white/5 rounded-2xl">
               <Phone size={16} className="text-slate-400" />
               <div>
                 <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Telefone</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">(11) 99999-0000</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{phone}</p>
               </div>
             </div>
           </div>

@@ -14,12 +14,14 @@ import RecentTransactions from '@/components/dashboard/RecentTransactions';
 import FinancialHealth from '@/components/dashboard/FinancialHealth';
 import { useAuth } from '@/contexts/AuthContext';
 
-const WIDGET_CONTENT: Record<string, React.ReactNode> = {
-  balance:      <BalanceHeader />,
-  cards:        <BankCardCarousel />,
-  transactions: <RecentTransactions />,
-  health:       <FinancialHealth />,
-};
+function renderWidgetContent(isEditMode: boolean): Record<string, React.ReactNode> {
+  return {
+    balance: <BalanceHeader />,
+    cards: <BankCardCarousel showTitle={!isEditMode} />,
+    transactions: <RecentTransactions showTitle={!isEditMode} />,
+    health: <FinancialHealth showTitle={!isEditMode} />,
+  };
+}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -47,6 +49,7 @@ export default function DashboardPage() {
 
   const cardsWidget  = widgets.find((w) => w.id === 'cards');
   const healthWidget = widgets.find((w) => w.id === 'health');
+  const widgetContent = renderWidgetContent(isEditMode);
 
   const dateStr = formatFullDate();
   const capitalizedDate = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
@@ -114,7 +117,7 @@ export default function DashboardPage() {
             <Reorder.Group axis="y" values={widgets} onReorder={reorder} className="flex flex-col gap-6">
               {widgets.map((w) => (
                 <DashboardWidget key={w.id} widget={w} onToggle={() => toggleVisibility(w.id)} isEditMode={true}>
-                  {WIDGET_CONTENT[w.id]}
+                  {widgetContent[w.id]}
                 </DashboardWidget>
               ))}
             </Reorder.Group>
@@ -136,14 +139,14 @@ export default function DashboardPage() {
                         {cardsWidget?.visible && (
                           <div className="flex-1 min-w-0">
                             <DashboardWidget widget={cardsWidget} onToggle={() => toggleVisibility(cardsWidget.id)} isEditMode={false}>
-                              {WIDGET_CONTENT[cardsWidget.id]}
+                              {widgetContent[cardsWidget.id]}
                             </DashboardWidget>
                           </div>
                         )}
                         {healthWidget?.visible && (
-                          <div className="shrink-0">
+                          <div className="w-[380px] max-w-full shrink-0">
                             <DashboardWidget widget={healthWidget} onToggle={() => toggleVisibility(healthWidget.id)} isEditMode={false}>
-                              {WIDGET_CONTENT[healthWidget.id]}
+                              {widgetContent[healthWidget.id]}
                             </DashboardWidget>
                           </div>
                         )}
@@ -153,7 +156,7 @@ export default function DashboardPage() {
 
                   return (
                     <DashboardWidget key={w.id} widget={w} onToggle={() => toggleVisibility(w.id)} isEditMode={false}>
-                      {WIDGET_CONTENT[w.id]}
+                      {widgetContent[w.id]}
                     </DashboardWidget>
                   );
                 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Target,
@@ -28,6 +28,7 @@ import Select, { SelectOption } from '@/components/ui/Select';
 import { useFabAction } from '@/contexts/FabContext';
 import BudgetDetailDrawer from '@/components/budget/BudgetDetailDrawer';
 import { Budget } from '@/types';
+import { formatCurrencyInput, parseCurrencyInput } from '@/lib/currencyInput';
 
 const iconMap: Record<string, React.ElementType> = {
   ShoppingCart, Home, Car, Tv, Heart, BarChart2, Package,
@@ -52,7 +53,13 @@ function BudgetFormModal({
 }) {
   const { setBudget, budgets } = useAppData();
   const [category, setCategory] = useState(initialCategory ?? CATEGORIES[0].name);
-  const [limit, setLimit] = useState(initialLimit ? String(initialLimit) : '');
+  const [limit, setLimit] = useState(initialLimit ? formatCurrencyInput(String(initialLimit)) : '');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setCategory(initialCategory ?? CATEGORIES[0].name);
+    setLimit(initialLimit ? formatCurrencyInput(String(initialLimit)) : '');
+  }, [isOpen, initialCategory, initialLimit]);
 
   const usedCategories = budgets.map((b) => b.category);
   const selectableCategories = isEditing ? CATEGORIES : CATEGORIES.filter((c) => !usedCategories.includes(c.name));
@@ -64,7 +71,7 @@ function BudgetFormModal({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const v = parseFloat(limit.replace(',', '.'));
+    const v = parseCurrencyInput(limit);
     if (isNaN(v) || v <= 0) return;
     const catDef = CATEGORIES.find((c) => c.name === category);
     setBudget({ category, limit: v, color: catDef?.color ?? '#6B7280' });
@@ -117,11 +124,10 @@ function BudgetFormModal({
                   Limite mensal (R$)
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="1"
+                  type="text"
+                  inputMode="decimal"
                   value={limit}
-                  onChange={(e) => setLimit(e.target.value)}
+                  onChange={(e) => setLimit(formatCurrencyInput(e.target.value))}
                   placeholder="0,00"
                   required
                   className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-50 text-lg font-bold focus:outline-none focus:border-amber-400 transition-colors"

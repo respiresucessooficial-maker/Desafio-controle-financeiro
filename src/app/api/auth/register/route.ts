@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { USER_ACCESS_STATUS } from '@/lib/access-status';
 import { isValidCPF, normalizeCPF } from '@/lib/cpf';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
@@ -11,6 +12,7 @@ interface RegisterPayload {
 }
 
 export async function POST(request: Request) {
+  const { origin } = new URL(request.url);
   const body = await request.json() as RegisterPayload;
   const name = body.name?.trim() ?? '';
   const email = body.email?.trim().toLowerCase() ?? '';
@@ -39,6 +41,16 @@ export async function POST(request: Request) {
   }
 
   const supabaseAdmin = createSupabaseAdminClient();
+  const supabaseAuth = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    },
+  );
 
   const { data: pendingUser, error: pendingUserError } = await supabaseAdmin
     .from('users')
@@ -60,13 +72,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: createdUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+  const { data: signUpData, error: createUserError } = await supabaseAuth.auth.signUp({
     email,
     password,
-    email_confirm: true,
-    user_metadata: {
-      cpf,
-      full_name: name,
+    options: {
+      emailRedirectTo: `${origin}/auth/callback?next=/dashboard`,
+      data: {
+        cpf,
+        full_name: name,
+      },
     },
   });
 
@@ -86,18 +100,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const authUserId = createdUser.user?.id;
-  if (!authUserId) {
-    return NextResponse.json(
-      { error: 'Nao foi possivel obter o identificador do usuario criado.' },
-      { status: 500 },
-    );
-  }
+  const authUserId = signUpData.user?.id;
 
   const { error: updateUserError } = await supabaseAdmin
     .from('users')
     .update({
-      auth_user_id: authUserId,
+      auth_user_id: authUserId ?? null,
       email,
       full_name: name,
       status: USER_ACCESS_STATUS.active,
@@ -106,7 +114,9 @@ export async function POST(request: Request) {
     .eq('id', pendingUser.id);
 
   if (updateUserError) {
-    await supabaseAdmin.auth.admin.deleteUser(authUserId);
+    if (authUserId) {
+      await supabaseAdmin.auth.admin.deleteUser(authUserId);
+    }
 
     return NextResponse.json(
       { error: 'Usuario criado, mas nao foi possivel concluir a vinculacao. Tente novamente.' },
@@ -116,6 +126,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     success: true,
-    message: 'Conta criada com sucesso. Agora voce ja pode entrar no sistema.',
+    message: 'Conta criada! Verifique seu e-mail para confirmar o cadastro.',
   });
 }

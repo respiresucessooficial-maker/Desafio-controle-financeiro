@@ -23,7 +23,6 @@ async function findAuthUserByEmail(
 }
 
 export async function POST(request: Request) {
-  const { origin } = new URL(request.url);
   const body = await request.json() as RegisterPayload;
   const name = body.name?.trim() ?? '';
   const email = body.email?.trim().toLowerCase() ?? '';
@@ -87,7 +86,6 @@ export async function POST(request: Request) {
     email,
     password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback?next=/dashboard`,
       data: {
         cpf,
         full_name: name,
@@ -128,26 +126,6 @@ export async function POST(request: Request) {
             );
           }
         }
-
-        const { error: resendError } = await supabaseAuth.auth.resend({
-          type: 'signup',
-          email,
-          options: {
-            emailRedirectTo: `${origin}/auth/callback?next=/dashboard`,
-          },
-        });
-
-        if (resendError) {
-          return NextResponse.json(
-            { error: 'Este e-mail ja esta cadastrado, mas nao foi possivel reenviar a confirmacao.' },
-            { status: 409 },
-          );
-        }
-
-        return NextResponse.json({
-          success: true,
-          message: 'Conta criada! Verifique seu e-mail para confirmar o cadastro.',
-        });
       }
 
       return NextResponse.json(
@@ -188,6 +166,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     success: true,
-    message: 'Conta criada! Verifique seu e-mail para confirmar o cadastro.',
+    message: 'Conta criada com sucesso.',
   });
 }

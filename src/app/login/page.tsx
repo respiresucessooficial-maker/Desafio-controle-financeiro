@@ -38,6 +38,25 @@ export default function LoginPage() {
     setSuccess('');
   }
 
+  async function validateUserAccess(authUserId: string) {
+    const { data: accessUser, error: accessError } = await supabase
+      .from('users')
+      .select('status')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+
+    if (accessError) {
+      await supabase.auth.signOut();
+      throw new Error('Nao foi possivel validar o acesso ao sistema. Entre em contato com o suporte.');
+    }
+
+    if (!accessUser || accessUser.status !== USER_ACCESS_STATUS.active) {
+      await supabase.auth.signOut();
+      setPassword('');
+      throw new Error('Voce nao pode fazer login no sistema. Entre em contato com o suporte.');
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -47,26 +66,25 @@ export default function LoginPage() {
     try {
       if (mode === 'login') {
         setValidatingLogin(true);
+
+        const loginCheckResponse = await fetch('/api/auth/login-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const loginCheckData = await loginCheckResponse.json();
+
+        if (!loginCheckResponse.ok) {
+          throw new Error(loginCheckData.error ?? 'Nao foi possivel validar o acesso para login.');
+        }
+
         const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
         if (loginError) throw loginError;
 
         const authUserId = loginData.user?.id;
-        const { data: accessUser, error: accessError } = await supabase
-          .from('users')
-          .select('status')
-          .eq('auth_user_id', authUserId ?? '')
-          .maybeSingle();
+        if (!authUserId) throw new Error('Nao foi possivel identificar o usuario autenticado.');
 
-        if (accessError) {
-          await supabase.auth.signOut();
-          throw new Error('Nao foi possivel validar o acesso ao sistema. Entre em contato com o suporte.');
-        }
-
-        if (!accessUser || accessUser.status !== USER_ACCESS_STATUS.active) {
-          await supabase.auth.signOut();
-          setPassword('');
-          throw new Error('Voce nao pode fazer login no sistema. Entre em contato com o suporte.');
-        }
+        await validateUserAccess(authUserId);
 
         setValidatingLogin(false);
         router.replace('/dashboard');
@@ -91,9 +109,17 @@ export default function LoginPage() {
         throw new Error(data.error ?? 'Ocorreu um erro ao criar a conta.');
       }
 
-      setSuccess(data.message ?? 'Conta criada com sucesso. Agora voce ja pode entrar.');
-      setMode('login');
-      setPassword('');
+      setValidatingLogin(true);
+      const { data: loginData, error: autoLoginError } = await supabase.auth.signInWithPassword({ email, password });
+      if (autoLoginError) throw autoLoginError;
+
+      const authUserId = loginData.user?.id;
+      if (!authUserId) throw new Error('Nao foi possivel identificar o usuario autenticado.');
+
+      await validateUserAccess(authUserId);
+
+      setSuccess(data.message ?? 'Conta criada com sucesso.');
+      router.replace('/dashboard');
     } catch (err: unknown) {
       setError(translateError(err instanceof Error ? err.message : 'Ocorreu um erro.'));
     } finally {
@@ -104,7 +130,7 @@ export default function LoginPage() {
 
   function translateError(msg: string): string {
     if (msg.includes('Invalid login credentials')) return 'E-mail ou senha incorretos.';
-    if (msg.includes('Email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+    if (msg.includes('Email not confirmed')) return 'Nao foi possivel concluir o login. Tente novamente.';
     if (msg.includes('User already registered')) return 'Este e-mail ja esta cadastrado.';
     if (msg.includes('Este e-mail ja esta cadastrado')) return 'Este e-mail ja esta cadastrado.';
     if (msg.includes('Password should be')) return 'A senha deve ter pelo menos 6 caracteres.';

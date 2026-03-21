@@ -60,7 +60,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
       setSelectedId(editAccount.institutionId ?? '');
       setForm({
         type: editAccount.type,
-        balance: formatCurrencyInput(String(editAccount.balance)),
+        balance: formatCurrencyInput(String(Math.round(editAccount.balance * 100))),
         agency: (editAccount.agency ?? '').slice(-2),
         accountNumber: (editAccount.accountNumber ?? '').slice(-3),
       });
@@ -122,7 +122,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
           color: inst.accentColor,
           accountId: editAccount.id,
           description: `Ajuste de saldo: ${diff > 0 ? '+' : ''}${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(diff)}`,
-        });
+        }, { skipBalanceUpdate: true });
       }
     } else {
       const newAcc = addAccount(data);
@@ -137,7 +137,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
           color: inst.accentColor,
           accountId: newAcc.id,
           description: 'Saldo inicial da conta',
-        });
+        }, { skipBalanceUpdate: true });
       }
     }
 

@@ -53,9 +53,26 @@ function formatDate(dateStr: string) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date);
 }
 
+type DisplayTx = Transaction & { _instCount?: number; _instTotal?: number; _baseLabel?: string };
+
+function groupInstallments(txs: Transaction[]): DisplayTx[] {
+  const seen = new Set<string>();
+  const result: DisplayTx[] = [];
+  for (const tx of txs) {
+    const match = tx.label.match(/^(.+)\s+\((\d+)\/(\d+)\)$/);
+    if (!match) { result.push(tx); continue; }
+    const [, base, , total] = match;
+    const key = `${base}||${total}||${Math.abs(tx.amount)}||${tx.category}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ ...tx, _instCount: parseInt(total), _instTotal: Math.abs(tx.amount) * parseInt(total), _baseLabel: base });
+  }
+  return result;
+}
+
 export default function RecentTransactions({ showTitle = true }: RecentTransactionsProps) {
   const { transactions, deleteTransaction } = useAppData();
-  const recent = transactions.slice(0, 8);
+  const recent = groupInstallments(transactions.slice(0, 12)).slice(0, 8);
 
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [editTx, setEditTx] = useState<Transaction | undefined>(undefined);
@@ -114,6 +131,9 @@ export default function RecentTransactions({ showTitle = true }: RecentTransacti
             {recent.map((tx, i) => {
               const Icon = iconMap[tx.icon] ?? ShoppingCart;
               const isIncome = tx.type === 'income';
+              const fmtCur = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+              const label = tx._baseLabel ?? tx.label;
+              const displayAmount = tx._instTotal ?? Math.abs(tx.amount);
 
               return (
                 <div key={tx.id}>
@@ -129,19 +149,18 @@ export default function RecentTransactions({ showTitle = true }: RecentTransacti
                       <Icon size={18} style={{ color: tx.color }} strokeWidth={2} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{tx.label}</p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{label}</p>
+                        {tx._instCount && (
+                          <span className="shrink-0 rounded-full bg-amber-100 dark:bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                            {tx._instCount}x
+                          </span>
+                        )}
+                      </div>
                       <p className="mt-0.5 text-xs text-slate-400">{tx.category} · {formatDate(tx.date)}</p>
                     </div>
-                    <span
-                      className={`shrink-0 text-sm font-bold ${
-                        isIncome ? 'text-green-600' : 'text-slate-800 dark:text-slate-200'
-                      }`}
-                    >
-                      {isIncome ? '+' : ''}
-                      {new Intl.NumberFormat('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL',
-                      }).format(tx.amount)}
+                    <span className={`shrink-0 text-sm font-bold ${isIncome ? 'text-green-600' : 'text-slate-800 dark:text-slate-200'}`}>
+                      {isIncome ? '+' : ''}{fmtCur.format(displayAmount)}
                     </span>
                   </button>
                   {i < recent.length - 1 && <div className="mx-2 h-px bg-slate-50 dark:bg-white/5" />}

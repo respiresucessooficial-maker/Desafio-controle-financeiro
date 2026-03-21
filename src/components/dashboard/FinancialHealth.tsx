@@ -113,7 +113,7 @@ export default function FinancialHealth({ showTitle = true }: FinancialHealthPro
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5 min-w-0 flex-1">
           {insights.map((item, i) => (
             <motion.div
               key={item.label}
@@ -136,13 +136,14 @@ export default function FinancialHealth({ showTitle = true }: FinancialHealthPro
                 )}
               </div>
 
-              <span className="whitespace-nowrap text-xs font-medium text-slate-600 dark:text-slate-300">
-                {item.label}
-              </span>
-
-              <span className="ml-3 whitespace-nowrap text-xs font-bold text-slate-800 dark:text-slate-100">
-                {item.value}
-              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 leading-none mb-0.5">
+                  {item.label}
+                </span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                  {item.value}
+                </span>
+              </div>
             </motion.div>
           ))}
         </div>

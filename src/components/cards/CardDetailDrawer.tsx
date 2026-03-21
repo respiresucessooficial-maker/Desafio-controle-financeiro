@@ -41,6 +41,23 @@ const iconMap: Record<string, React.ElementType> = {
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
+type DisplayTx = Transaction & { _instCount?: number; _instTotal?: number; _baseLabel?: string };
+
+function groupInstallments(txs: Transaction[]): DisplayTx[] {
+  const seen = new Set<string>();
+  const result: DisplayTx[] = [];
+  for (const tx of txs) {
+    const match = tx.label.match(/^(.+)\s+\((\d+)\/(\d+)\)$/);
+    if (!match) { result.push(tx); continue; }
+    const [, base, , total] = match;
+    const key = `${base}||${total}||${Math.abs(tx.amount)}||${tx.category}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ ...tx, _instCount: parseInt(total), _instTotal: Math.abs(tx.amount) * parseInt(total), _baseLabel: base });
+  }
+  return result;
+}
+
 function formatDate(dateStr: string) {
   const date = new Date(dateStr + 'T00:00:00');
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date);
@@ -70,9 +87,9 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
 
   if (!bank) return null;
 
-  const cardTransactions = transactions
-    .filter((t) => t.bankId === bank.id)
-    .slice(0, 5);
+  const cardTransactions = groupInstallments(
+    transactions.filter((t) => t.bankId === bank.id)
+  ).slice(0, 5);
 
   // Future invoices: transactions linked to this card dated after the current month
   const now = new Date();
@@ -229,14 +246,14 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                     <Calendar size={15} className="text-slate-400 flex-shrink-0" />
                     <div>
                       <p className="text-[10px] text-slate-400">Fechamento</p>
-                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Dia {bank.closingDay}</p>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{bank.closingDay ? `Dia ${bank.closingDay}` : '—'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5 p-3 bg-white dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/8">
                     <TrendingDown size={15} className="text-slate-400 flex-shrink-0" />
                     <div>
                       <p className="text-[10px] text-slate-400">Vencimento</p>
-                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Dia {bank.dueDay}</p>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{bank.dueDay ? `Dia ${bank.dueDay}` : '—'}</p>
                     </div>
                   </div>
                 </div>
@@ -257,21 +274,30 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                   <div className="flex flex-col gap-0.5">
                     {cardTransactions.map((tx, i) => {
                       const Icon = iconMap[tx.icon] ?? ShoppingCart;
+                      const displayLabel = tx._baseLabel ?? tx.label;
+                      const displayAmount = tx._instTotal ?? Math.abs(tx.amount);
                       return (
                         <div key={tx.id}>
                           <div className="flex items-center gap-3 py-2.5">
                             <div
-                              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
                               style={{ backgroundColor: tx.color + '18' }}
                             >
                               <Icon size={14} style={{ color: tx.color }} strokeWidth={2} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{tx.label}</p>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{displayLabel}</p>
+                                {tx._instCount && (
+                                  <span className="shrink-0 rounded-full bg-amber-100 dark:bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                                    {tx._instCount}x
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[10px] text-slate-400">{formatDate(tx.date)}</p>
                             </div>
-                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex-shrink-0">
-                              {fmt(Math.abs(tx.amount))}
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 shrink-0">
+                              {fmt(displayAmount)}
                             </span>
                           </div>
                           {i < cardTransactions.length - 1 && (

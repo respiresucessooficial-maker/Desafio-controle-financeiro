@@ -3,7 +3,15 @@
 -- Run this in the Supabase SQL Editor
 -- ============================================================
 
-create table if not exists accounts (
+-- ── Drop existing tables (clean slate) ───────────────────────────────────────
+drop table if exists transactions cascade;
+drop table if exists banks        cascade;
+drop table if exists accounts     cascade;
+drop table if exists budgets      cascade;
+drop table if exists goals        cascade;
+
+-- ── Tables ───────────────────────────────────────────────────────────────────
+create table accounts (
   id             text primary key,
   user_id        text not null,
   institution_id text,
@@ -21,7 +29,7 @@ create table if not exists accounts (
   created_at     timestamptz default now()
 );
 
-create table if not exists banks (
+create table banks (
   id                  text primary key,
   user_id             text not null,
   name                text not null,
@@ -44,7 +52,7 @@ create table if not exists banks (
   created_at          timestamptz default now()
 );
 
-create table if not exists transactions (
+create table transactions (
   id          text primary key,
   user_id     text not null,
   label       text not null,
@@ -60,7 +68,7 @@ create table if not exists transactions (
   created_at  timestamptz default now()
 );
 
-create table if not exists budgets (
+create table budgets (
   id           text primary key,
   user_id      text not null,
   category     text not null,
@@ -69,7 +77,7 @@ create table if not exists budgets (
   created_at   timestamptz default now()
 );
 
-create table if not exists goals (
+create table goals (
   id          text primary key,
   user_id     text not null,
   name        text not null,
@@ -83,12 +91,12 @@ create table if not exists goals (
 );
 
 -- ── Indexes ──────────────────────────────────────────────────────────────────
-create index if not exists accounts_user_id_idx          on accounts(user_id);
-create index if not exists banks_user_id_idx             on banks(user_id);
-create index if not exists transactions_user_id_idx      on transactions(user_id);
-create index if not exists transactions_account_id_idx   on transactions(account_id);
-create index if not exists budgets_user_id_idx           on budgets(user_id);
-create index if not exists goals_user_id_idx             on goals(user_id);
+create index accounts_user_id_idx          on accounts(user_id);
+create index banks_user_id_idx             on banks(user_id);
+create index transactions_user_id_idx      on transactions(user_id);
+create index transactions_account_id_idx   on transactions(account_id);
+create index budgets_user_id_idx           on budgets(user_id);
+create index goals_user_id_idx             on goals(user_id);
 
 -- ── Row Level Security ────────────────────────────────────────────────────────
 alter table accounts     enable row level security;

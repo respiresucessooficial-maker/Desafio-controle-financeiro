@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Pencil, Trash2,
-  ShoppingCart, Home, Car, Tv, Heart, BarChart2, Package,
+  ShoppingCart, Home, Car, Tv, Heart, BarChart2, Package, Briefcase,
   BookOpen, TrendingUp, TrendingDown, DollarSign,
   CheckCircle, AlertTriangle, XCircle,
 } from 'lucide-react';
@@ -12,7 +12,7 @@ import { Budget, Transaction } from '@/types';
 import { CATEGORIES } from '@/data/categories';
 
 const iconMap: Record<string, React.ElementType> = {
-  ShoppingCart, Home, Car, Tv, Heart, BarChart2, Package,
+  ShoppingCart, Home, Car, Tv, Heart, BarChart2, Package, Briefcase,
   BookOpen, TrendingUp, TrendingDown, DollarSign,
 };
 

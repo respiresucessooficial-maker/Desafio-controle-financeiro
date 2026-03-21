@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, CreditCard, ChevronLeft, Pencil, Minus, Plus, Search } from 'lucide-react';
+import { X, Check, CreditCard, ChevronLeft, Pencil, Minus, Plus, Search, Trash2, AlertTriangle } from 'lucide-react';
 import { useAppData } from '@/contexts/AppDataContext';
 import { Bank } from '@/types';
 import { INSTITUTIONS, Institution } from '@/data/institutions';
@@ -101,14 +101,15 @@ interface Props {
 }
 
 export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
-  const { addBank, updateBank, accounts } = useAppData();
+  const { addBank, updateBank, deleteBank, accounts } = useAppData();
   const [form, setForm] = useState(emptyForm);
   const [selectedId, setSelectedId] = useState<string>('');
   const [search, setSearch] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isEditing = !!editBank;
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) { setConfirmDelete(false); return; }
     setSearch('');
     if (editBank) {
       const match = INSTITUTIONS.find((p) => p.code === editBank.code);
@@ -119,9 +120,9 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
         brand: editBank.brand,
         code: editBank.code,
         number: editBank.number.replace(/\*/g, '').trim(),
-        balance: formatCurrencyInput(String(editBank.balance)),
-        creditLimit: editBank.creditLimit ? formatCurrencyInput(String(editBank.creditLimit)) : '',
-        creditUsed: editBank.creditUsed ? formatCurrencyInput(String(editBank.creditUsed)) : '',
+        balance: formatCurrencyInput(String(Math.round(editBank.balance * 100))),
+        creditLimit: editBank.creditLimit ? formatCurrencyInput(String(Math.round(editBank.creditLimit * 100))) : '',
+        creditUsed: editBank.creditUsed ? formatCurrencyInput(String(Math.round(editBank.creditUsed * 100))) : '',
         closingDay: editBank.closingDay ? String(editBank.closingDay) : '',
         dueDay: editBank.dueDay ? String(editBank.dueDay) : '',
         colorIndex: colorIndex >= 0 ? colorIndex : 0,
@@ -486,6 +487,57 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
                       <Check size={18} />
                       {isEditing ? 'Salvar alteracoes' : 'Adicionar cartao'}
                     </motion.button>
+
+                    {isEditing && (
+                      <AnimatePresence mode="wait">
+                        {!confirmDelete ? (
+                          <motion.button
+                            key="del-btn"
+                            type="button"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setConfirmDelete(true)}
+                            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-500/30 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                          >
+                            <Trash2 size={15} />
+                            Apagar cartão
+                          </motion.button>
+                        ) : (
+                          <motion.div
+                            key="del-confirm"
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 6 }}
+                            className="rounded-2xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/8 p-4 flex flex-col gap-3"
+                          >
+                            <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                              <AlertTriangle size={15} className="shrink-0" />
+                              <p className="text-sm font-semibold">Confirmar exclusão?</p>
+                            </div>
+                            <p className="text-xs text-red-500/80 dark:text-red-400/70">
+                              O cartão será removido permanentemente. Esta ação não pode ser desfeita.
+                            </p>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDelete(false)}
+                                className="flex-1 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { deleteBank(editBank!.id); onClose(); }}
+                                className="flex-1 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-xs font-bold text-white transition-colors"
+                              >
+                                Sim, apagar
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    )}
                   </motion.form>
                 )}
               </AnimatePresence>

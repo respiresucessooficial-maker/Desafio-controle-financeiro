@@ -50,6 +50,23 @@ function formatDate(dateStr: string) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(d);
 }
 
+type DisplayTx = Transaction & { _instCount?: number; _instTotal?: number; _baseLabel?: string };
+
+function groupInstallments(txs: Transaction[]): DisplayTx[] {
+  const seen = new Set<string>();
+  const result: DisplayTx[] = [];
+  for (const tx of txs) {
+    const match = tx.label.match(/^(.+)\s+\((\d+)\/(\d+)\)$/);
+    if (!match) { result.push(tx); continue; }
+    const [, base, , total] = match;
+    const key = `${base}||${total}||${Math.abs(tx.amount)}||${tx.category}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ ...tx, _instCount: parseInt(total), _instTotal: Math.abs(tx.amount) * parseInt(total), _baseLabel: base });
+  }
+  return result;
+}
+
 type Period = 'week' | 'month' | 'all';
 
 const PAGE_SIZE = 15;
@@ -120,8 +137,9 @@ export default function TransactionsPage() {
     return { income, expenses, balance: income - expenses };
   }, [filtered]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const grouped = useMemo(() => groupInstallments(filtered), [filtered]);
+  const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
+  const paginated = grouped.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function handleEdit(tx: Transaction) {
     setEditTx(tx);
@@ -379,30 +397,32 @@ export default function TransactionsPage() {
                     className="group flex items-center gap-3 px-5 py-4 hover:bg-slate-50/80 dark:hover:bg-white/5 transition-colors cursor-pointer"
                   >
                     <div
-                      className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+                      className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
                       style={{ backgroundColor: tx.color + '18' }}
                     >
                       <Icon size={18} style={{ color: tx.color }} strokeWidth={2} />
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{tx.label}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {tx.category} · {formatDate(tx.date)}
-                      </p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
+                          {tx._baseLabel ?? tx.label}
+                        </p>
+                        {tx._instCount && (
+                          <span className="shrink-0 rounded-full bg-amber-100 dark:bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                            {tx._instCount}x
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{tx.category} · {formatDate(tx.date)}</p>
                     </div>
 
-                    <span
-                      className={`text-sm font-bold flex-shrink-0 mr-2 ${
-                        isIncome ? 'text-green-600' : 'text-slate-800 dark:text-slate-200'
-                      }`}
-                    >
-                      {isIncome ? '+' : ''}
-                      {fmt(tx.amount)}
+                    <span className={`text-sm font-bold shrink-0 mr-2 ${isIncome ? 'text-green-600' : 'text-slate-800 dark:text-slate-200'}`}>
+                      {isIncome ? '+' : ''}{fmt(tx._instTotal ?? Math.abs(tx.amount))}
                     </span>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                       <motion.button
                         whileTap={{ scale: 0.9 }}
                         onClick={(e) => { e.stopPropagation(); handleEdit(tx); }}
@@ -453,7 +473,7 @@ export default function TransactionsPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-5 py-4 border-t border-slate-50 dark:border-white/5">
             <p className="text-xs text-slate-400">
-              {filtered.length} transaç{filtered.length !== 1 ? 'ões' : 'ão'} ·{' '}
+              {grouped.length} transaç{grouped.length !== 1 ? 'ões' : 'ão'} ·{' '}
               Página {page} de {totalPages}
             </p>
             <div className="flex gap-2">
@@ -515,7 +535,7 @@ function FilterPill({
       className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-slate-100 dark:bg-white/10 text-xs font-semibold text-slate-600 dark:text-slate-300"
     >
       {color && (
-        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
       )}
       {label}
       <button

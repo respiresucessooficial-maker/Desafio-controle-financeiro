@@ -9,7 +9,7 @@ import {
   useRef,
 } from 'react';
 import { Transaction, Budget, Bank, Goal, Account, GoalContribution } from '@/types';
-import { getCategoryDef } from '@/data/categories';
+import { getCategoryDef, CATEGORIES, CategoryDef } from '@/data/categories';
 import { INSTITUTIONS } from '@/data/institutions';
 import { supabase } from '@/lib/supabase';
 
@@ -62,6 +62,35 @@ function removeGoalHistory(uid: string, goalId: string) {
   const current = readGoalHistory(uid);
   delete current[goalId];
   window.localStorage.setItem(goalHistoryStorageKey(uid), JSON.stringify(current));
+}
+
+// ── Custom categories ─────────────────────────────────────────────────────────
+export interface CustomCategory {
+  name: string;
+  icon: string;
+  color: string;
+  type: 'expense' | 'income';
+  isCustom: true;
+}
+
+function customCategoriesKey(uid: string) {
+  return `custom-categories:${uid}`;
+}
+
+function readCustomCategories(uid: string): CustomCategory[] {
+  if (typeof window === 'undefined' || !uid) return [];
+  try {
+    const raw = window.localStorage.getItem(customCategoriesKey(uid));
+    if (!raw) return [];
+    return (JSON.parse(raw) as CustomCategory[]) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomCategories(uid: string, cats: CustomCategory[]) {
+  if (typeof window === 'undefined' || !uid) return;
+  window.localStorage.setItem(customCategoriesKey(uid), JSON.stringify(cats));
 }
 
 // ── ID generation ─────────────────────────────────────────────────────────────
@@ -179,7 +208,8 @@ interface AppDataContextValue {
   goals: Goal[];
   accounts: Account[];
   loaded: boolean;
-  addTransaction: (t: Omit<Transaction, 'id'>) => Transaction;
+  categories: CategoryDef[];
+  addTransaction: (t: Omit<Transaction, 'id'>, opts?: { skipBalanceUpdate?: boolean }) => Transaction;
   updateTransaction: (id: string, data: Partial<Omit<Transaction, 'id'>>) => void;
   deleteTransaction: (id: string) => void;
   setBudget: (b: Omit<Budget, 'id'>) => void;
@@ -193,10 +223,14 @@ interface AppDataContextValue {
   addAccount: (a: Omit<Account, 'id'>) => Account;
   updateAccount: (id: string, data: Partial<Omit<Account, 'id'>>) => void;
   deleteAccount: (id: string) => void;
+  addCategory: (c: Omit<CustomCategory, 'isCustom'>) => void;
+  updateCategory: (name: string, data: Partial<Pick<CustomCategory, 'name' | 'icon' | 'color'>>) => void;
+  deleteCategory: (name: string) => void;
 }
 
 const AppDataContext = createContext<AppDataContextValue>({
   transactions: [], budgets: [], banks: [], goals: [], accounts: [], loaded: false,
+  categories: CATEGORIES,
   addTransaction: () => ({ id: '', label: '', amount: 0, date: '', category: '', type: 'income', icon: '', color: '' }),
   updateTransaction: () => {}, deleteTransaction: () => {},
   setBudget: () => {}, deleteBudget: () => {},
@@ -204,17 +238,27 @@ const AppDataContext = createContext<AppDataContextValue>({
   addGoal: () => {}, updateGoal: () => {}, deleteGoal: () => {},
   addAccount: () => ({ id: '', name: '', type: 'corrente', balance: 0, color: '', textColor: '', accentColor: '', brand: '', code: '' }),
   updateAccount: () => {}, deleteAccount: () => {},
+  addCategory: () => {}, updateCategory: () => {}, deleteCategory: () => {},
 });
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [budgets, setBudgets]           = useState<Budget[]>([]);
-  const [banks, setBanks]               = useState<Bank[]>([]);
-  const [goals, setGoals]               = useState<Goal[]>([]);
-  const [accounts, setAccounts]         = useState<Account[]>([]);
-  const [loaded, setLoaded]             = useState(false);
+  const [transactions, setTransactions]       = useState<Transaction[]>([]);
+  const [budgets, setBudgets]                 = useState<Budget[]>([]);
+  const [banks, setBanks]                     = useState<Bank[]>([]);
+  const [goals, setGoals]                     = useState<Goal[]>([]);
+  const [accounts, setAccounts]               = useState<Account[]>([]);
+  const [loaded, setLoaded]                   = useState(false);
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const userId = useRef<string>('');
+  const categoriesRef = useRef<CategoryDef[]>(CATEGORIES);
+
+  const categories: CategoryDef[] = [...CATEGORIES, ...customCategories];
+
+  useEffect(() => {
+    categoriesRef.current = categories;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customCategories]);
 
   async function loadForUser(uid: string) {
     userId.current = uid;
@@ -247,6 +291,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       })),
     );
     setAccounts((accData ?? []).map(rowToAccount));
+    setCustomCategories(readCustomCategories(uid));
     setLoaded(true);
   }
 
@@ -260,7 +305,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       } else if (event === 'SIGNED_OUT') {
         userId.current = '';
         setTransactions([]); setBudgets([]); setBanks([]);
-        setGoals([]); setAccounts([]); setLoaded(true);
+        setGoals([]); setAccounts([]); setCustomCategories([]); setLoaded(true);
       }
     });
 
@@ -269,17 +314,41 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Transactions ───────────────────────────────────────────────────────────
-  const addTransaction = useCallback((t: Omit<Transaction, 'id'>): Transaction => {
-    const catDef = getCategoryDef(t.category);
+  const addTransaction = useCallback((t: Omit<Transaction, 'id'>, opts?: { skipBalanceUpdate?: boolean }): Transaction => {
+    const catDef = categoriesRef.current.find((c) => c.name === t.category) ?? getCategoryDef(t.category);
     const newT: Transaction = { ...t, id: genId(), icon: t.icon || catDef.icon, color: t.color || catDef.color };
     setTransactions((prev) => [newT, ...prev]);
+    if (newT.accountId && !opts?.skipBalanceUpdate) {
+      setAccounts((prev) => prev.map((a) => {
+        if (a.id !== newT.accountId) return a;
+        const newBalance = a.balance + newT.amount;
+        supabase.from('accounts').update({ balance: newBalance })
+          .eq('id', a.id).eq('user_id', userId.current)
+          .then(({ error }) => { if (error) console.error('[addTransaction:balance]', error); });
+        return { ...a, balance: newBalance };
+      }));
+    }
     supabase.from('transactions').insert(transactionToRow(newT, userId.current))
       .then(({ error }) => { if (error) console.error('[addTransaction]', error); });
     return newT;
   }, []);
 
   const updateTransaction = useCallback((id: string, data: Partial<Omit<Transaction, 'id'>>) => {
-    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
+    setTransactions((prev) => {
+      const old = prev.find((t) => t.id === id);
+      if (old?.accountId && 'amount' in data && data.amount !== old.amount) {
+        const delta = data.amount! - old.amount;
+        setAccounts((accounts) => accounts.map((a) => {
+          if (a.id !== old.accountId) return a;
+          const newBalance = a.balance + delta;
+          supabase.from('accounts').update({ balance: newBalance })
+            .eq('id', a.id).eq('user_id', userId.current)
+            .then(({ error }) => { if (error) console.error('[updateTransaction:balance]', error); });
+          return { ...a, balance: newBalance };
+        }));
+      }
+      return prev.map((t) => (t.id === id ? { ...t, ...data } : t));
+    });
     const row: Record<string, unknown> = {};
     if ('label'       in data) row.label       = data.label;
     if ('amount'      in data) row.amount       = data.amount;
@@ -296,7 +365,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteTransaction = useCallback((id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setTransactions((prev) => {
+      const t = prev.find((tx) => tx.id === id);
+      if (t?.accountId) {
+        setAccounts((accounts) => accounts.map((a) => {
+          if (a.id !== t.accountId) return a;
+          const newBalance = a.balance - t.amount;
+          supabase.from('accounts').update({ balance: newBalance })
+            .eq('id', a.id).eq('user_id', userId.current)
+            .then(({ error }) => { if (error) console.error('[deleteTransaction:balance]', error); });
+          return { ...a, balance: newBalance };
+        }));
+      }
+      return prev.filter((tx) => tx.id !== id);
+    });
     supabase.from('transactions').delete().eq('id', id).eq('user_id', userId.current)
       .then(({ error }) => { if (error) console.error('[deleteTransaction]', error); });
   }, []);
@@ -438,14 +520,41 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       .then(({ error }) => { if (error) console.error('[deleteAccount]', error); });
   }, []);
 
+  // ── Custom categories ───────────────────────────────────────────────────────
+  const addCategory = useCallback((c: Omit<CustomCategory, 'isCustom'>) => {
+    setCustomCategories((prev) => {
+      const next = [...prev, { ...c, isCustom: true as const }];
+      saveCustomCategories(userId.current, next);
+      return next;
+    });
+  }, []);
+
+  const updateCategory = useCallback((name: string, data: Partial<Pick<CustomCategory, 'name' | 'icon' | 'color'>>) => {
+    setCustomCategories((prev) => {
+      const next = prev.map((c) => (c.name === name ? { ...c, ...data } : c));
+      saveCustomCategories(userId.current, next);
+      return next;
+    });
+  }, []);
+
+  const deleteCategory = useCallback((name: string) => {
+    setCustomCategories((prev) => {
+      const next = prev.filter((c) => c.name !== name);
+      saveCustomCategories(userId.current, next);
+      return next;
+    });
+  }, []);
+
   return (
     <AppDataContext.Provider value={{
       transactions, budgets, banks, goals, accounts, loaded,
+      categories,
       addTransaction, updateTransaction, deleteTransaction,
       setBudget, deleteBudget,
       addBank, updateBank, deleteBank,
       addGoal, updateGoal, deleteGoal,
       addAccount, updateAccount, deleteAccount,
+      addCategory, updateCategory, deleteCategory,
     }}>
       {children}
     </AppDataContext.Provider>

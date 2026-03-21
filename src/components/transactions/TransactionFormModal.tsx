@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, HelpCircle, Calculator, ChevronDown, ChevronLeft, ChevronRight,
-  ShoppingCart, Home, Car, Tv, Heart, TrendingUp, BarChart2, BookOpen, Package,
+  ShoppingCart, Home, Car, Tv, Heart, TrendingUp, BarChart2, BookOpen, Package, Briefcase,
   Store, Calendar, CreditCard, DollarSign, ArrowDownCircle, ArrowUpCircle, Building2, Minus, Plus,
+  Music, Zap, UtensilsCrossed, Dumbbell, Coffee, Plane, Gift, Smartphone, Shirt, Globe, Star, PiggyBank,
 } from 'lucide-react';
 import { Transaction, Account, Bank } from '@/types';
 import { CATEGORIES } from '@/data/categories';
@@ -15,7 +17,9 @@ import { INSTITUTIONS } from '@/data/institutions';
 import { getInstitutionLogoSources } from '@/utils/logoSources';
 
 const ICON_MAP: Record<string, React.ElementType> = {
-  ShoppingCart, Home, Car, Tv, Heart, TrendingUp, BarChart2, BookOpen, Package,
+  ShoppingCart, Home, Car, Tv, Heart, TrendingUp, BarChart2, BookOpen, Package, Briefcase,
+  Music, Zap, UtensilsCrossed, Dumbbell, Coffee, Plane, Gift, Smartphone, Shirt, Globe, Star,
+  DollarSign, CreditCard, PiggyBank,
 };
 
 const MONTHS_PT = [
@@ -96,16 +100,20 @@ const emptyForm = {
 };
 
 export default function TransactionFormModal({ isOpen, onClose, editTransaction }: Props) {
-  const { addTransaction, updateTransaction, banks, accounts } = useAppData();
+  const { addTransaction, updateTransaction, banks, accounts, categories } = useAppData();
+  const expenseCategories = categories.filter((c) => c.type === 'expense' || c.type === 'both');
+  const incomeCategories  = categories.filter((c) => c.type === 'income'  || c.type === 'both');
   const [form, setForm]           = useState(emptyForm);
   const [accountId, setAccountId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'card'>('pix');
   const [paymentType, setPaymentType] = useState<'debit' | 'credit'>('debit');
   const [installments, setInstallments] = useState(1);
   const [openDropdown, setOpenDropdown] = useState<'category' | 'account' | 'card' | 'date' | null>(null);
+  const [catDropPos, setCatDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [calView, setCalView]     = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
 
   const categoryRef = useRef<HTMLDivElement>(null);
+  const catMenuRef  = useRef<HTMLDivElement>(null);
   const accountRef  = useRef<HTMLDivElement>(null);
   const cardRef     = useRef<HTMLDivElement>(null);
   const dateRef     = useRef<HTMLDivElement>(null);
@@ -144,7 +152,8 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
   useEffect(() => {
     function handleOutside(e: MouseEvent) {
       const t = e.target as Node;
-      if (categoryRef.current && !categoryRef.current.contains(t))
+      if (categoryRef.current && !categoryRef.current.contains(t) &&
+          catMenuRef.current && !catMenuRef.current.contains(t))
         setOpenDropdown((p) => (p === 'category' ? null : p));
       if (accountRef.current && !accountRef.current.contains(t))
         setOpenDropdown((p) => (p === 'account' ? null : p));
@@ -172,10 +181,12 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
     const installCount   = paymentType === 'credit' && form.bankId ? installments : 1;
     const installmentAmt = parseFloat((finalAmt / installCount).toFixed(2));
 
+    const affectsAccount = paymentMethod === 'pix' || paymentType === 'debit';
     const base = {
       type:        form.type,
       category:    form.category,
       bankId:      form.bankId || undefined,
+      accountId:   affectsAccount && accountId ? accountId : undefined,
       description: form.description || undefined,
       icon:        catDef.icon,
       color:       catDef.color,
@@ -208,7 +219,7 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
     setForm((prev) => ({ ...prev, [k]: v }));
 
   const isExpense    = form.type === 'expense';
-  const catDef       = useMemo(() => CATEGORIES.find((c) => c.name === form.category) ?? CATEGORIES[0], [form.category]);
+  const catDef       = useMemo(() => categories.find((c) => c.name === form.category) ?? CATEGORIES[0], [categories, form.category]);
   const CategoryIcon = ICON_MAP[catDef.icon] ?? Package;
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const selectedCard    = banks.find((b) => b.id === form.bankId);
@@ -288,7 +299,11 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
               {/* ── Type toggle ── */}
               <div className="flex gap-2 mx-5 mt-4">
                 <button
-                  type="button" onClick={() => set('type', 'expense')}
+                  type="button" onClick={() => {
+                    set('type', 'expense');
+                    const cur = categories.find((c) => c.name === form.category);
+                    if (!cur || cur.type === 'income') set('category', expenseCategories[0]?.name ?? 'Alimentação');
+                  }}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                     isExpense
                       ? 'bg-red-500/15 text-red-500 dark:text-red-400 border border-red-500/25'
@@ -298,7 +313,11 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
                   <ArrowDownCircle size={13} /> Despesa
                 </button>
                 <button
-                  type="button" onClick={() => set('type', 'income')}
+                  type="button" onClick={() => {
+                    set('type', 'income');
+                    const cur = categories.find((c) => c.name === form.category);
+                    if (!cur || cur.type === 'expense') set('category', incomeCategories[0]?.name ?? 'Salário');
+                  }}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                     !isExpense
                       ? 'bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/25'
@@ -310,7 +329,10 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
               </div>
 
               {/* ── Fields ── */}
-              <div className="px-5 pt-3 pb-6 flex flex-col">
+              <div
+                className="px-5 pt-3 pb-6 flex flex-col max-h-[70vh] overflow-y-auto styled-scrollbar"
+                onScroll={() => { setOpenDropdown(null); setCatDropPos(null); }}
+              >
 
                 {/* Description */}
                 <div className="flex items-center gap-3 py-3 border-b border-slate-100 dark:border-white/6">
@@ -364,10 +386,17 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
                 {/* ── Category ── */}
                 <div className="pt-4">
                   <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Categoria</p>
-                  <div ref={categoryRef} className="relative">
+                  <div ref={categoryRef}>
                     <button
                       type="button"
-                      onClick={() => setOpenDropdown((p) => (p === 'category' ? null : 'category'))}
+                      onClick={() => {
+                        if (openDropdown === 'category') { setOpenDropdown(null); setCatDropPos(null); return; }
+                        if (categoryRef.current) {
+                          const r = categoryRef.current.getBoundingClientRect();
+                          setCatDropPos({ top: r.bottom + 4, left: r.left, width: r.width });
+                        }
+                        setOpenDropdown('category');
+                      }}
                       className="w-full flex items-center gap-3 py-2 px-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                     >
                       <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: catDef.color + '28' }}>
@@ -377,30 +406,48 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
                       <ChevronDown size={15} className={`text-slate-400 transition-transform ${openDropdown === 'category' ? 'rotate-180' : ''}`} />
                     </button>
 
-                    <AnimatePresence>
-                      {openDropdown === 'category' && (
-                        <motion.div {...dropdownMotion}
-                          className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-[#222736] rounded-2xl shadow-xl border border-slate-100 dark:border-white/8 overflow-hidden py-1 max-h-60 overflow-y-auto styled-scrollbar"
+                    {openDropdown === 'category' && catDropPos && createPortal(
+                        <div
+                          ref={catMenuRef}
+                          style={{ position: 'fixed', top: catDropPos.top, left: catDropPos.left, width: catDropPos.width, zIndex: 9999 }}
+                          className="bg-white dark:bg-[#222736] rounded-2xl shadow-xl border border-slate-100 dark:border-white/8 overflow-hidden py-1 max-h-60 overflow-y-auto styled-scrollbar animate-in fade-in slide-in-from-top-1 duration-150"
                         >
-                          {CATEGORIES.map((cat) => {
-                            const CatIcon  = ICON_MAP[cat.icon] ?? Package;
-                            const isSelected = form.category === cat.name;
+                          {(() => {
+                            const pool = isExpense ? expenseCategories : incomeCategories;
+                            const custom = pool.filter((c) => (c as { isCustom?: boolean }).isCustom);
+                            const builtin = pool.filter((c) => !(c as { isCustom?: boolean }).isCustom);
+                            const renderBtn = (cat: typeof pool[0]) => {
+                              const CatIcon = ICON_MAP[cat.icon] ?? Package;
+                              const isSelected = form.category === cat.name;
+                              return (
+                                <button key={cat.name} type="button"
+                                  onClick={() => { set('category', cat.name); setOpenDropdown(null); }}
+                                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${isSelected ? 'bg-slate-50 dark:bg-white/6' : 'hover:bg-slate-50 dark:hover:bg-white/4'}`}
+                                >
+                                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: cat.color + '22' }}>
+                                    <CatIcon size={14} style={{ color: cat.color }} />
+                                  </div>
+                                  <span className="flex-1 text-left text-sm text-slate-700 dark:text-slate-200">{cat.name}</span>
+                                  {isSelected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />}
+                                </button>
+                              );
+                            };
                             return (
-                              <button key={cat.name} type="button"
-                                onClick={() => { set('category', cat.name); setOpenDropdown(null); }}
-                                className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${isSelected ? 'bg-slate-50 dark:bg-white/6' : 'hover:bg-slate-50 dark:hover:bg-white/4'}`}
-                              >
-                                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: cat.color + '22' }}>
-                                  <CatIcon size={14} style={{ color: cat.color }} />
-                                </div>
-                                <span className="flex-1 text-left text-sm text-slate-700 dark:text-slate-200">{cat.name}</span>
-                                {isSelected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />}
-                              </button>
+                              <>
+                                {custom.length > 0 && (
+                                  <>
+                                    <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Minhas categorias</p>
+                                    {custom.map(renderBtn)}
+                                    <div className="mx-3 my-1 h-px bg-slate-100 dark:bg-white/8" />
+                                  </>
+                                )}
+                                {builtin.map(renderBtn)}
+                              </>
                             );
-                          })}
-                        </motion.div>
+                          })()}
+                        </div>,
+                        document.body
                       )}
-                    </AnimatePresence>
                   </div>
                 </div>
 

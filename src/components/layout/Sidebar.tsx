@@ -17,6 +17,7 @@ import {
   Bell,
   CalendarDays,
   User,
+  Tag,
 } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -29,6 +30,7 @@ const navItems = [
   { icon: Target, label: 'Orcamento', href: '/budget' },
   { icon: LayoutGrid, label: 'Metas', href: '/goals' },
   { icon: CalendarDays, label: 'Calendario', href: '/calendar' },
+  { icon: Tag, label: 'Categorias', href: '/categories' },
 ];
 
 export default function Sidebar() {

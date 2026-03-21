@@ -84,6 +84,23 @@ function AccountLogo({ account }: { account: Account }) {
 
 const PAGE_SIZE = 20;
 
+type DisplayTx = Transaction & { _instCount?: number; _instTotal?: number; _baseLabel?: string };
+
+function groupInstallments(txs: Transaction[]): DisplayTx[] {
+  const seen = new Set<string>();
+  const result: DisplayTx[] = [];
+  for (const tx of txs) {
+    const match = tx.label.match(/^(.+)\s+\((\d+)\/(\d+)\)$/);
+    if (!match) { result.push(tx); continue; }
+    const [, base, , total] = match;
+    const key = `${base}||${total}||${Math.abs(tx.amount)}||${tx.category}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ ...tx, _instCount: parseInt(total), _instTotal: Math.abs(tx.amount) * parseInt(total), _baseLabel: base });
+  }
+  return result;
+}
+
 export default function AccountDetailDrawer({ account, banks, transactions, onClose }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -98,6 +115,8 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
     .filter((t) => t.accountId === account.id || (t.bankId && accountCardIds.has(t.bankId)))
     .sort((a, b) => b.date.localeCompare(a.date));
 
+  const grouped = groupInstallments(accountTransactions);
+
   const totalIncome = accountTransactions
     .filter((t) => t.type === 'income')
     .reduce((s, t) => s + t.amount, 0);
@@ -105,8 +124,8 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
     .filter((t) => t.type === 'expense')
     .reduce((s, t) => s + Math.abs(t.amount), 0);
 
-  const paginated = accountTransactions.slice(0, page * PAGE_SIZE);
-  const hasMore = paginated.length < accountTransactions.length;
+  const paginated = grouped.slice(0, page * PAGE_SIZE);
+  const hasMore = paginated.length < grouped.length;
 
   return (
     <AnimatePresence>
@@ -211,11 +230,11 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
                     Histórico
                   </p>
                   <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-slate-400">
-                    {accountTransactions.length}
+                    {grouped.length}
                   </span>
                 </div>
 
-                {accountTransactions.length === 0 ? (
+                {grouped.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-10">
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/10">
                       <Building2 size={18} className="text-slate-400" />
@@ -228,6 +247,10 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
                       const Icon = iconMap[tx.icon] ?? ShoppingCart;
                       const isIncome = tx.type === 'income';
                       const isAdjust = tx.label === 'Ajuste de saldo' || tx.label === 'Saldo inicial';
+                      const isCard = !!tx.bankId;
+                      const isPix  = !isAdjust && !isCard && !!tx.accountId;
+                      const displayLabel = tx._baseLabel ?? tx.label;
+                      const displayAmount = tx._instTotal ?? Math.abs(tx.amount);
                       return (
                         <div key={tx.id} className="flex items-center gap-3 px-4 py-3">
                           <div
@@ -237,14 +260,31 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
                             <Icon size={15} style={{ color: tx.color }} strokeWidth={2} />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
-                              {tx.label}
-                            </p>
-                            <p className="text-[10px] text-slate-400">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                {displayLabel}
+                              </p>
+                              {tx._instCount && (
+                                <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+                                  {tx._instCount}x
+                                </span>
+                              )}
+                            </div>
+                            <p className="flex items-center gap-1.5 text-[10px] text-slate-400">
                               {formatDate(tx.date)}
                               {isAdjust && (
-                                <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+                                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
                                   ajuste
+                                </span>
+                              )}
+                              {isPix && (
+                                <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold text-violet-600 dark:bg-violet-500/15 dark:text-violet-400">
+                                  PIX
+                                </span>
+                              )}
+                              {isCard && (
+                                <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                                  Cartão
                                 </span>
                               )}
                             </p>
@@ -256,7 +296,7 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
                                 : 'text-slate-700 dark:text-slate-200'
                             }`}
                           >
-                            {isIncome ? '+' : '−'}{fmt(Math.abs(tx.amount))}
+                            {isIncome ? '+' : '−'}{fmt(displayAmount)}
                           </span>
                         </div>
                       );
@@ -268,7 +308,7 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
                         onClick={() => setPage((p) => p + 1)}
                         className="w-full py-3 text-xs font-semibold text-amber-500 transition-colors hover:text-amber-600 hover:bg-amber-50/50 dark:hover:bg-amber-500/5"
                       >
-                        Ver mais ({accountTransactions.length - paginated.length} restantes)
+                        Ver mais ({grouped.length - paginated.length} restantes)
                       </button>
                     )}
                   </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -14,6 +14,14 @@ import { formatCPF, isValidCPF } from '@/lib/cpf';
 type Mode = 'login' | 'register';
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const { user, loading } = useAuth();
   const { isDark } = useTheme();
   const router = useRouter();

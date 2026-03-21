@@ -11,6 +11,17 @@ interface RegisterPayload {
   cpf?: string;
 }
 
+async function findAuthUserByEmail(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdminClient>,
+  targetEmail: string,
+) {
+  const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) return { user: null, error };
+
+  const user = data.users.find((item) => item.email?.toLowerCase() === targetEmail.toLowerCase()) ?? null;
+  return { user, error: null };
+}
+
 export async function POST(request: Request) {
   const { origin } = new URL(request.url);
   const body = await request.json() as RegisterPayload;
@@ -54,7 +65,7 @@ export async function POST(request: Request) {
 
   const { data: pendingUser, error: pendingUserError } = await supabaseAdmin
     .from('users')
-    .select('id, status')
+    .select('id, status, auth_user_id')
     .eq('cpf', cpf)
     .maybeSingle();
 
@@ -87,7 +98,58 @@ export async function POST(request: Request) {
   if (createUserError) {
     const message = createUserError.message;
 
+    console.error('[register] signUp error:', message);
+
     if (message.includes('already been registered') || message.includes('already registered')) {
+      const { user: existingAuthUser, error: findAuthUserError } = await findAuthUserByEmail(supabaseAdmin, email);
+
+      if (findAuthUserError) {
+        return NextResponse.json(
+          { error: 'Nao foi possivel localizar o cadastro existente deste e-mail.' },
+          { status: 500 },
+        );
+      }
+
+      if (existingAuthUser) {
+        if (pendingUser.auth_user_id !== existingAuthUser.id) {
+          const { error: syncUserError } = await supabaseAdmin
+            .from('users')
+            .update({
+              auth_user_id: existingAuthUser.id,
+              email,
+              full_name: name,
+            })
+            .eq('id', pendingUser.id);
+
+          if (syncUserError) {
+            return NextResponse.json(
+              { error: 'Nao foi possivel atualizar o cadastro pendente deste usuario.' },
+              { status: 500 },
+            );
+          }
+        }
+
+        const { error: resendError } = await supabaseAuth.auth.resend({
+          type: 'signup',
+          email,
+          options: {
+            emailRedirectTo: `${origin}/auth/callback?next=/dashboard`,
+          },
+        });
+
+        if (resendError) {
+          return NextResponse.json(
+            { error: 'Este e-mail ja esta cadastrado, mas nao foi possivel reenviar a confirmacao.' },
+            { status: 409 },
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: 'Conta criada! Verifique seu e-mail para confirmar o cadastro.',
+        });
+      }
+
       return NextResponse.json(
         { error: 'Este e-mail ja esta cadastrado.' },
         { status: 409 },
@@ -95,7 +157,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { error: 'Nao foi possivel criar o usuario agora.' },
+      { error: `Nao foi possivel criar o usuario agora. Detalhe: ${message}` },
       { status: 500 },
     );
   }

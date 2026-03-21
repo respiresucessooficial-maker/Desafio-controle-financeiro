@@ -12,6 +12,44 @@ import {
 } from '@/lib/kiwify';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 
+async function removeAuthUsersForCustomer(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdminClient>,
+  authUserId: string | null | undefined,
+  email: string,
+) {
+  const idsToDelete = new Set<string>();
+
+  if (authUserId) {
+    idsToDelete.add(authUserId);
+  }
+
+  const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) {
+    return error;
+  }
+
+  data.users
+    .filter((user) => user.email?.toLowerCase() === email.toLowerCase())
+    .forEach((user) => idsToDelete.add(user.id));
+
+  for (const id of idsToDelete) {
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(id, false);
+    if (deleteError && !deleteError.message.toLowerCase().includes('not found')) {
+      return deleteError;
+    }
+
+    const { error: hardDeleteError } = await supabaseAdmin.rpc('hard_delete_auth_user', {
+      target_user_id: id,
+    });
+
+    if (hardDeleteError) {
+      return hardDeleteError;
+    }
+  }
+
+  return null;
+}
+
 function getExpectedToken() {
   return process.env.KIWIFY_WEBHOOK_SECRET?.trim() ?? '';
 }
@@ -51,7 +89,7 @@ export async function POST(request: Request) {
 
   const { data: existingUser, error: findUserError } = await supabaseAdmin
     .from('users')
-    .select('id, status')
+    .select('id, status, auth_user_id')
     .eq('cpf', customer.cpf)
     .maybeSingle();
 
@@ -71,10 +109,24 @@ export async function POST(request: Request) {
       });
     }
 
+    const deleteAuthUserError = await removeAuthUsersForCustomer(
+      supabaseAdmin,
+      existingUser.auth_user_id,
+      customer.email,
+    );
+
+    if (deleteAuthUserError) {
+      return NextResponse.json(
+        { error: 'Nao foi possivel remover o acesso do cliente antes da inativacao.' },
+        { status: 500 },
+      );
+    }
+
     const { error: inactivateError } = await supabaseAdmin
       .from('users')
       .update({
         status: USER_ACCESS_STATUS.inactive,
+        auth_user_id: null,
         kiwify_order_id: orderId || null,
         kiwify_payload: payload,
       })
@@ -101,11 +153,27 @@ export async function POST(request: Request) {
     });
   }
 
+  if (existingUser?.status === USER_ACCESS_STATUS.inactive) {
+    const deleteAuthUserError = await removeAuthUsersForCustomer(
+      supabaseAdmin,
+      existingUser.auth_user_id,
+      customer.email,
+    );
+
+    if (deleteAuthUserError) {
+      return NextResponse.json(
+        { error: 'Nao foi possivel remover o acesso antigo do cliente.' },
+        { status: 500 },
+      );
+    }
+  }
+
   const payloadToSave = {
     full_name: customer.fullName,
     email: customer.email,
     cpf: customer.cpf,
     status: USER_ACCESS_STATUS.pending,
+    auth_user_id: null,
     source: 'kiwify',
     kiwify_order_id: orderId || null,
     kiwify_payload: payload,

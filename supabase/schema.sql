@@ -105,6 +105,21 @@ create table goals (
   created_at  timestamptz default now()
 );
 
+create or replace function public.hard_delete_auth_user(target_user_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  delete from auth.users where id = target_user_id;
+  return found;
+end;
+$$;
+
+revoke all on function public.hard_delete_auth_user(uuid) from public, anon, authenticated;
+grant execute on function public.hard_delete_auth_user(uuid) to service_role;
+
 -- Indexes
 create index users_auth_user_id_idx on users(auth_user_id);
 create index users_status_idx on users(status);

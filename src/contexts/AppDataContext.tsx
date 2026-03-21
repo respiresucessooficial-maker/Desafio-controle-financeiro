@@ -276,7 +276,7 @@ interface AppDataContextValue {
   addAccount: (a: Omit<Account, 'id'>) => Account;
   updateAccount: (id: string, data: Partial<Omit<Account, 'id'>>) => void;
   deleteAccount: (id: string) => void;
-  addCategory: (c: Omit<CustomCategory, 'isCustom'>) => void;
+  addCategory: (c: Omit<CustomCategory, 'id' | 'isCustom'>) => void;
   updateCategory: (name: string, data: Partial<Pick<CustomCategory, 'name' | 'icon' | 'color'>>) => void;
   deleteCategory: (name: string) => void;
 }

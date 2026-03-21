@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -8,75 +8,70 @@ import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, ArrowLeft, CreditCa
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { formatCPF, isValidCPF } from '@/lib/cpf';
 
 type Mode = 'login' | 'register';
-
-function formatCPF(value: string) {
-  return value
-    .replace(/\D/g, '')
-    .slice(0, 11)
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-}
-
-function isValidCPF(cpf: string) {
-  const digits = cpf.replace(/\D/g, '');
-  if (digits.length !== 11 || /^(\d)\1+$/.test(digits)) return false;
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(digits[i]) * (10 - i);
-  let check = (sum * 10) % 11;
-  if (check === 10 || check === 11) check = 0;
-  if (check !== parseInt(digits[9])) return false;
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(digits[i]) * (11 - i);
-  check = (sum * 10) % 11;
-  if (check === 10 || check === 11) check = 0;
-  return check === parseInt(digits[10]);
-}
 
 export default function LoginPage() {
   const { user, loading } = useAuth();
   const { isDark } = useTheme();
   const router = useRouter();
 
-  const [mode, setMode]         = useState<Mode>('login');
-  const [email, setEmail]       = useState('');
+  const [mode, setMode] = useState<Mode>('login');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName]         = useState('');
-  const [cpf, setCpf]           = useState('');
+  const [name, setName] = useState('');
+  const [cpf, setCpf] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError]           = useState('');
-  const [success, setSuccess]       = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     if (!loading && user) router.replace('/dashboard');
   }, [user, loading, router]);
 
-  function resetState() { setError(''); setSuccess(''); }
+  function resetState() {
+    setError('');
+    setSuccess('');
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(''); setSuccess(''); setSubmitting(true);
+    setError('');
+    setSuccess('');
+    setSubmitting(true);
+
     try {
       if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+        if (loginError) throw loginError;
+
         router.replace('/dashboard');
-      } else {
-        if (!isValidCPF(cpf)) {
-          setError('CPF inválido. Verifique e tente novamente.');
-          setSubmitting(false);
-          return;
-        }
-        const { error } = await supabase.auth.signUp({
-          email, password,
-          options: { data: { full_name: name, cpf: cpf.replace(/\D/g, '') } },
-        });
-        if (error) throw error;
-        setSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro.');
+        return;
       }
+
+      if (!isValidCPF(cpf)) {
+        setError('CPF invalido. Verifique e tente novamente.');
+        setSubmitting(false);
+        return;
+      }
+
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, cpf }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Ocorreu um erro ao criar a conta.');
+      }
+
+      setSuccess(data.message ?? 'Conta criada com sucesso. Agora voce ja pode entrar.');
+      setMode('login');
+      setPassword('');
     } catch (err: unknown) {
       setError(translateError(err instanceof Error ? err.message : 'Ocorreu um erro.'));
     } finally {
@@ -86,9 +81,10 @@ export default function LoginPage() {
 
   function translateError(msg: string): string {
     if (msg.includes('Invalid login credentials')) return 'E-mail ou senha incorretos.';
-    if (msg.includes('Email not confirmed'))        return 'Confirme seu e-mail antes de entrar.';
-    if (msg.includes('User already registered'))    return 'Este e-mail já está cadastrado.';
-    if (msg.includes('Password should be'))         return 'A senha deve ter pelo menos 6 caracteres.';
+    if (msg.includes('Email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+    if (msg.includes('User already registered')) return 'Este e-mail ja esta cadastrado.';
+    if (msg.includes('Este e-mail ja esta cadastrado')) return 'Este e-mail ja esta cadastrado.';
+    if (msg.includes('Password should be')) return 'A senha deve ter pelo menos 6 caracteres.';
     return msg;
   }
 
@@ -98,7 +94,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0a0a0f] flex items-center justify-center p-4 relative overflow-hidden">
-
       <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-amber-400/10 dark:bg-amber-500/6 blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-amber-300/8 dark:bg-amber-400/4 blur-[90px] pointer-events-none" />
 
@@ -120,7 +115,6 @@ export default function LoginPage() {
       </motion.div>
 
       <div className="relative w-full max-w-md">
-
         <motion.div
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -144,24 +138,27 @@ export default function LoginPage() {
           className="bg-white dark:bg-card rounded-3xl border border-slate-100 dark:border-white/8 shadow-2xl shadow-black/5 dark:shadow-black/40 overflow-hidden"
         >
           <div className="flex border-b border-slate-100 dark:border-white/8">
-            {(['login', 'register'] as const).map((m) => (
+            {(['login', 'register'] as const).map((tab) => (
               <button
-                key={m}
-                onClick={() => { setMode(m); resetState(); }}
+                key={tab}
+                onClick={() => {
+                  setMode(tab);
+                  resetState();
+                }}
                 className={`relative flex-1 py-4 text-sm font-semibold transition-colors ${
-                  mode === m
+                  mode === tab
                     ? 'text-slate-900 dark:text-slate-50'
                     : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                 }`}
               >
-                {mode === m && (
+                {mode === tab && (
                   <motion.span
                     layoutId="tabIndicator"
                     className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500"
                     transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                   />
                 )}
-                {m === 'login' ? 'Entrar' : 'Cadastrar'}
+                {tab === 'login' ? 'Entrar' : 'Cadastrar'}
               </button>
             ))}
           </div>
@@ -182,13 +179,12 @@ export default function LoginPage() {
                 <p className="text-sm text-slate-400">
                   {mode === 'login'
                     ? 'Entre com seu e-mail e senha para continuar.'
-                    : 'Preencha os dados abaixo para criar sua conta grátis.'}
+                    : 'Preencha os dados abaixo para criar sua conta.'}
                 </p>
               </motion.div>
             </AnimatePresence>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-
               <div style={{ overflow: 'hidden' }}>
                 <AnimatePresence initial={false}>
                   {mode === 'register' && (
@@ -254,7 +250,7 @@ export default function LoginPage() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPass((s) => !s)}
+                  onClick={() => setShowPass((state) => !state)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-500 transition-colors"
                 >
                   {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -264,7 +260,9 @@ export default function LoginPage() {
               <AnimatePresence>
                 {error && (
                   <motion.p
-                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
                     className="text-sm text-red-500 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-4 py-2.5 rounded-xl"
                   >
@@ -273,7 +271,9 @@ export default function LoginPage() {
                 )}
                 {success && (
                   <motion.p
-                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
                     className="text-sm text-green-600 bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 px-4 py-2.5 rounded-xl"
                   >
@@ -289,17 +289,21 @@ export default function LoginPage() {
                 whileTap={!submitting ? { scale: 0.98 } : {}}
                 className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-colors mt-1"
               >
-                {submitting
-                  ? <Loader2 size={17} className="animate-spin" />
-                  : <>{mode === 'login' ? 'Entrar' : 'Criar conta'}<ArrowRight size={16} /></>
-                }
+                {submitting ? (
+                  <Loader2 size={17} className="animate-spin" />
+                ) : (
+                  <>
+                    {mode === 'login' ? 'Entrar' : 'Criar conta'}
+                    <ArrowRight size={16} />
+                  </>
+                )}
               </motion.button>
             </form>
           </div>
         </motion.div>
 
         <p className="text-center text-xs text-slate-400 mt-5">
-          Ao continuar, você concorda com nossos termos de uso e política de privacidade.
+          Ao continuar, voce concorda com nossos termos de uso e politica de privacidade.
         </p>
       </div>
     </div>

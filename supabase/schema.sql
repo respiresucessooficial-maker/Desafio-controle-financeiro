@@ -1,16 +1,31 @@
 -- ============================================================
--- Desafio Controle Financeiro — Supabase Schema
+-- Desafio Controle Financeiro - Supabase Schema
 -- Run this in the Supabase SQL Editor
 -- ============================================================
 
--- ── Drop existing tables (clean slate) ───────────────────────────────────────
+-- Drop existing tables (clean slate)
 drop table if exists transactions cascade;
-drop table if exists banks        cascade;
-drop table if exists accounts     cascade;
-drop table if exists budgets      cascade;
-drop table if exists goals        cascade;
+drop table if exists banks cascade;
+drop table if exists accounts cascade;
+drop table if exists budgets cascade;
+drop table if exists goals cascade;
+drop table if exists users cascade;
 
--- ── Tables ───────────────────────────────────────────────────────────────────
+-- Tables
+create table users (
+  id              uuid primary key default gen_random_uuid(),
+  auth_user_id    uuid unique,
+  full_name       text not null,
+  email           text not null,
+  cpf             text not null unique,
+  status          smallint not null default 1,
+  source          text not null default 'manual',
+  kiwify_order_id text,
+  kiwify_payload  jsonb,
+  registered_at   timestamptz,
+  created_at      timestamptz default now()
+);
+
 create table accounts (
   id             text primary key,
   user_id        text not null,
@@ -90,24 +105,45 @@ create table goals (
   created_at  timestamptz default now()
 );
 
--- ── Indexes ──────────────────────────────────────────────────────────────────
-create index accounts_user_id_idx          on accounts(user_id);
-create index banks_user_id_idx             on banks(user_id);
-create index transactions_user_id_idx      on transactions(user_id);
-create index transactions_account_id_idx   on transactions(account_id);
-create index budgets_user_id_idx           on budgets(user_id);
-create index goals_user_id_idx             on goals(user_id);
+-- Indexes
+create index users_auth_user_id_idx on users(auth_user_id);
+create index users_status_idx on users(status);
+create index accounts_user_id_idx on accounts(user_id);
+create index banks_user_id_idx on banks(user_id);
+create index transactions_user_id_idx on transactions(user_id);
+create index transactions_account_id_idx on transactions(account_id);
+create index budgets_user_id_idx on budgets(user_id);
+create index goals_user_id_idx on goals(user_id);
 
--- ── Row Level Security ────────────────────────────────────────────────────────
-alter table accounts     enable row level security;
-alter table banks        enable row level security;
+-- Row Level Security
+alter table users enable row level security;
+alter table accounts enable row level security;
+alter table banks enable row level security;
 alter table transactions enable row level security;
-alter table budgets      enable row level security;
-alter table goals        enable row level security;
+alter table budgets enable row level security;
+alter table goals enable row level security;
 
 -- Each user can only see and manage their own data
-create policy "accounts: own data"     on accounts     for all using (auth.uid()::text = user_id);
-create policy "banks: own data"        on banks        for all using (auth.uid()::text = user_id);
-create policy "transactions: own data" on transactions for all using (auth.uid()::text = user_id);
-create policy "budgets: own data"      on budgets      for all using (auth.uid()::text = user_id);
-create policy "goals: own data"        on goals        for all using (auth.uid()::text = user_id);
+create policy "users: own data"
+  on users for select
+  using (auth.uid() = auth_user_id);
+
+create policy "accounts: own data"
+  on accounts for all
+  using (auth.uid()::text = user_id);
+
+create policy "banks: own data"
+  on banks for all
+  using (auth.uid()::text = user_id);
+
+create policy "transactions: own data"
+  on transactions for all
+  using (auth.uid()::text = user_id);
+
+create policy "budgets: own data"
+  on budgets for all
+  using (auth.uid()::text = user_id);
+
+create policy "goals: own data"
+  on goals for all
+  using (auth.uid()::text = user_id);

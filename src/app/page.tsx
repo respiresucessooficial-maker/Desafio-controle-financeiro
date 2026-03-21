@@ -151,12 +151,12 @@ export default function LandingPage() {
             </motion.p>
 
             <motion.div variants={fade} className="flex items-center gap-4 flex-wrap">
-              <Link href="/login">
+              <Link href="/login?mode=register">
                 <motion.span
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-[15px] cursor-pointer transition-colors shadow-lg shadow-amber-500/25"
                 >
-                  Começar gratuitamente
+                  Quero começar agora
                   <ArrowRight size={17} />
                 </motion.span>
               </Link>

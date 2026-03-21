@@ -164,7 +164,7 @@ function NotificationCard({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function NotificationsPage() {
-  const { allAlerts, dismissAlert, dismissAll, markAsRead, markAllAsRead, isRead } = useNotifications();
+  const { alerts: allAlerts, dismissAlert, dismissAll, markAsRead, markAllAsRead, isRead } = useNotifications();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   useFabAction({ label: '', onClick: () => {}, hidden: true });

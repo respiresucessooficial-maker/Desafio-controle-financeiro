@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, ArrowLeft, CreditCard } from 'lucide-react';
@@ -17,8 +17,11 @@ export default function LoginPage() {
   const { user, loading } = useAuth();
   const { isDark } = useTheme();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [mode, setMode] = useState<Mode>('login');
+  const [mode, setMode] = useState<Mode>(() =>
+    searchParams.get('mode') === 'register' ? 'register' : 'login'
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');

@@ -41,15 +41,16 @@ function SetLimitModal({
   }, [category]);
 
   if (!category) return null;
+  const selectedCategory = category;
 
-  const catDef = categories.find((c) => c.name === category) ?? getCategoryDef(category);
+  const catDef = categories.find((c) => c.name === selectedCategory) ?? getCategoryDef(selectedCategory);
   const Icon = ICON_MAP[catDef.icon] ?? Package;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const v = parseCurrencyInput(limit);
     if (isNaN(v) || v <= 0) return;
-    setBudget({ category, limit: v, color: catDef.color });
+    setBudget({ category: selectedCategory, limit: v, color: catDef.color });
     onClose();
   }
 
@@ -86,7 +87,7 @@ function SetLimitModal({
               <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: catDef.color + '22' }}>
                 <Icon size={17} style={{ color: catDef.color }} />
               </div>
-              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{category}</span>
+              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{selectedCategory}</span>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">

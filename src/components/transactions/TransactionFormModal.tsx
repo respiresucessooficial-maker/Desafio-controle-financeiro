@@ -185,7 +185,7 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
     const installmentAmt = parseFloat((finalAmt / installCount).toFixed(2));
 
     const affectsAccount = paymentMethod === 'pix' || paymentType === 'debit';
-    const resolvedPaymentType = !form.bankId
+    const resolvedPaymentType: 'pix' | 'debit' | 'credit' = !form.bankId
       ? 'pix'
       : paymentType === 'credit' ? 'credit' : 'debit';
     const base = {

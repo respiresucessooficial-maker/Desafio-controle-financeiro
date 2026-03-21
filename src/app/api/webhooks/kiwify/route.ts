@@ -4,7 +4,11 @@ import {
   extractKiwifyCustomerData,
   extractKiwifyOrderId,
   getKiwifyTokenFromPayload,
+  isChargebackEvent,
   isApprovedKiwifyPurchase,
+  isRefundEvent,
+  isSubscriptionCanceledEvent,
+  isSubscriptionOverdueEvent,
 } from '@/lib/kiwify';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 
@@ -33,14 +37,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Webhook nao autorizado.' }, { status: 401 });
   }
 
-  if (!isApprovedKiwifyPurchase(payload)) {
-    return NextResponse.json({
-      success: true,
-      ignored: true,
-      message: 'Evento recebido, mas ignorado por nao representar pagamento aprovado.',
-    });
-  }
-
   const customer = extractKiwifyCustomerData(payload);
 
   if (!customer) {
@@ -61,15 +57,47 @@ export async function POST(request: Request) {
 
   if (findUserError) {
     return NextResponse.json(
-      { error: 'Nao foi possivel consultar o pre-cadastro.' },
+      { error: 'Nao foi possivel consultar o cadastro do cliente.' },
       { status: 500 },
     );
   }
 
-  if (existingUser?.status === USER_ACCESS_STATUS.active) {
+  if (isRefundEvent(payload) || isChargebackEvent(payload) || isSubscriptionCanceledEvent(payload) || isSubscriptionOverdueEvent(payload)) {
+    if (!existingUser) {
+      return NextResponse.json({
+        success: true,
+        ignored: true,
+        message: 'Cliente nao encontrado para inativacao.',
+      });
+    }
+
+    const { error: inactivateError } = await supabaseAdmin
+      .from('users')
+      .update({
+        status: USER_ACCESS_STATUS.inactive,
+        kiwify_order_id: orderId || null,
+        kiwify_payload: payload,
+      })
+      .eq('id', existingUser.id);
+
+    if (inactivateError) {
+      return NextResponse.json(
+        { error: 'Nao foi possivel inativar o cliente.' },
+        { status: 500 },
+      );
+    }
+
     return NextResponse.json({
       success: true,
-      message: 'Cliente ja possui cadastro ativo. Nenhuma alteracao foi feita.',
+      message: 'Cliente inativado com sucesso.',
+    });
+  }
+
+  if (!isApprovedKiwifyPurchase(payload)) {
+    return NextResponse.json({
+      success: true,
+      ignored: true,
+      message: 'Evento recebido, mas ignorado por nao exigir alteracao de acesso.',
     });
   }
 
@@ -96,6 +124,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     success: true,
-    message: 'Pre-cadastro salvo com status pendente.',
+    message: existingUser
+      ? 'Cadastro encontrado e movido para status pendente.'
+      : 'Pre-cadastro salvo com status pendente.',
   });
 }

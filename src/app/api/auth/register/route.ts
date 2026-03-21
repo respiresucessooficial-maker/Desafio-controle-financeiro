@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
   if (!pendingUser || pendingUser.status !== USER_ACCESS_STATUS.pending) {
     return NextResponse.json(
-      { error: 'Voce nao tem acesso liberado para se cadastrar no sistema.' },
+      { error: 'Voce nao tem acesso liberado para se cadastrar no sistema. Entre em contato com o suporte.' },
       { status: 403 },
     );
   }

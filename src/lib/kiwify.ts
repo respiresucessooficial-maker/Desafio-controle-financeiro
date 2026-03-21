@@ -111,3 +111,38 @@ export function isApprovedKiwifyPurchase(payload: unknown) {
     event === 'purchase_approved' ||
     orderStatus === 'paid';
 }
+
+export function isRefundEvent(payload: unknown) {
+  const event = getKiwifyEvent(payload);
+  const orderStatus = getKiwifyOrderStatus(payload);
+
+  return event === 'reembolso' ||
+    event === 'refund' ||
+    orderStatus === 'refunded';
+}
+
+export function isChargebackEvent(payload: unknown) {
+  const event = getKiwifyEvent(payload);
+  const orderStatus = getKiwifyOrderStatus(payload);
+
+  return event === 'chargeback' ||
+    orderStatus === 'chargeback';
+}
+
+export function isSubscriptionCanceledEvent(payload: unknown) {
+  const event = getKiwifyEvent(payload);
+  const orderStatus = getKiwifyOrderStatus(payload);
+
+  return event === 'subscription_canceled' ||
+    event === 'assinatura_cancelada' ||
+    orderStatus === 'canceled';
+}
+
+export function isSubscriptionOverdueEvent(payload: unknown) {
+  const event = getKiwifyEvent(payload);
+  const orderStatus = getKiwifyOrderStatus(payload);
+
+  return event === 'subscription_overdue' ||
+    event === 'assinatura_atrasada' ||
+    orderStatus === 'overdue';
+}

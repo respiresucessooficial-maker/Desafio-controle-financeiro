@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, ArrowLeft, CreditCard } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { USER_ACCESS_STATUS } from '@/lib/access-status';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatCPF, isValidCPF } from '@/lib/cpf';
@@ -24,12 +25,13 @@ export default function LoginPage() {
   const [cpf, setCpf] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [validatingLogin, setValidatingLogin] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    if (!loading && user) router.replace('/dashboard');
-  }, [user, loading, router]);
+    if (!loading && user && !validatingLogin) router.replace('/dashboard');
+  }, [user, loading, router, validatingLogin]);
 
   function resetState() {
     setError('');
@@ -44,9 +46,29 @@ export default function LoginPage() {
 
     try {
       if (mode === 'login') {
-        const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+        setValidatingLogin(true);
+        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
         if (loginError) throw loginError;
 
+        const authUserId = loginData.user?.id;
+        const { data: accessUser, error: accessError } = await supabase
+          .from('users')
+          .select('status')
+          .eq('auth_user_id', authUserId ?? '')
+          .maybeSingle();
+
+        if (accessError) {
+          await supabase.auth.signOut();
+          throw new Error('Nao foi possivel validar o acesso ao sistema. Entre em contato com o suporte.');
+        }
+
+        if (!accessUser || accessUser.status !== USER_ACCESS_STATUS.active) {
+          await supabase.auth.signOut();
+          setPassword('');
+          throw new Error('Voce nao pode fazer login no sistema. Entre em contato com o suporte.');
+        }
+
+        setValidatingLogin(false);
         router.replace('/dashboard');
         return;
       }
@@ -75,6 +97,7 @@ export default function LoginPage() {
     } catch (err: unknown) {
       setError(translateError(err instanceof Error ? err.message : 'Ocorreu um erro.'));
     } finally {
+      setValidatingLogin(false);
       setSubmitting(false);
     }
   }
@@ -85,6 +108,7 @@ export default function LoginPage() {
     if (msg.includes('User already registered')) return 'Este e-mail ja esta cadastrado.';
     if (msg.includes('Este e-mail ja esta cadastrado')) return 'Este e-mail ja esta cadastrado.';
     if (msg.includes('Password should be')) return 'A senha deve ter pelo menos 6 caracteres.';
+    if (msg.includes('Entre em contato com o suporte')) return msg;
     return msg;
   }
 
@@ -253,7 +277,7 @@ export default function LoginPage() {
                   onClick={() => setShowPass((state) => !state)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-500 transition-colors"
                 >
-                  {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showPass ? <Eye size={15} /> : <EyeOff size={15} />}
                 </button>
               </div>
 

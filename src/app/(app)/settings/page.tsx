@@ -220,7 +220,6 @@ export default function SettingsPage() {
   const email = user?.email ?? 'Sem email';
   const phone = (user?.user_metadata?.phone as string | undefined)?.trim() || 'Nao informado';
   const planLabel = (user?.user_metadata?.plan as string | undefined)?.trim() || 'Plano Premium';
-  const planBadge = planLabel.replace(/^Plano\s+/i, '');
 
   function handleDelete() {
     localStorage.clear();
@@ -302,9 +301,6 @@ export default function SettingsPage() {
             <div>
               <h3 className="text-xl font-bold text-slate-900 dark:text-slate-50">{fullName}</h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{planLabel}</p>
-              <span className="inline-flex items-center mt-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-semibold px-2.5 py-1 rounded-full">
-                {planBadge}
-              </span>
             </div>
           </div>
           {avatarFeedback && (

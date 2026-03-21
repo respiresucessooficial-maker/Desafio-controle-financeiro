@@ -14,6 +14,7 @@ import { useFabAction } from '@/contexts/FabContext';
 import { INSTITUTIONS } from '@/data/institutions';
 import { getInstitutionLogoSources } from '@/utils/logoSources';
 import { ACCOUNT_TYPE_LABELS } from '@/data/accountTypes';
+import { getCardRemainingAvailableLimit } from '@/lib/cardLimits';
 
 const tileFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -137,7 +138,7 @@ function AccountTile({
 export default function CardsPage() {
   const { banks, accounts, transactions } = useAppData();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-  const [detailBank, setDetailBank] = useState<Bank | null>(null);
+  const [detailBankId, setDetailBankId] = useState<string | null>(null);
   const [detailAccount, setDetailAccount] = useState<Account | null>(null);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [cardModalOpen, setCardModalOpen] = useState(false);
@@ -188,6 +189,7 @@ export default function CardsPage() {
     : banks;
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const detailBank = detailBankId ? banks.find((b) => b.id === detailBankId) ?? null : null;
 
   const fmt = (v: number) => tileFmt.format(v);
 
@@ -196,7 +198,7 @@ export default function CardsPage() {
     [accounts],
   );
   const totalCreditAvail = useMemo(
-    () => banks.reduce((s, b) => s + Math.max(0, (b.balance ?? 0) - (b.creditUsed ?? 0)), 0),
+    () => banks.reduce((s, b) => s + getCardRemainingAvailableLimit(b), 0),
     [banks],
   );
 
@@ -350,7 +352,11 @@ export default function CardsPage() {
           >
             {filteredCards.map((bank) => (
               <motion.div key={bank.id} variants={itemVariants}>
-                <BankCard bank={bank} onClick={() => setDetailBank(bank)} showCreditBar />
+                <BankCard
+                  bank={bank}
+                  onClick={() => setDetailBankId(bank.id)}
+                  showCreditBar
+                />
               </motion.div>
             ))}
 
@@ -382,7 +388,7 @@ export default function CardsPage() {
       <CardDetailDrawer
         bank={detailBank}
         transactions={transactions}
-        onClose={() => setDetailBank(null)}
+        onClose={() => setDetailBankId(null)}
       />
       <AccountDetailDrawer
         account={detailAccount}

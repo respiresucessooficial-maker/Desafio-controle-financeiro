@@ -63,7 +63,7 @@ create table banks (
   due_day             integer,
   invoice_status      text,
   last_invoice_amount numeric,
-  account_id          text,
+  account_id          text references accounts(id) on delete set null,
   created_at          timestamptz default now()
 );
 
@@ -77,7 +77,7 @@ create table transactions (
   type        text not null,
   icon        text not null,
   color       text not null,
-  bank_id     text,
+  bank_id     text references banks(id) on delete cascade,
   account_id  text references accounts(id) on delete set null,
   description text,
   created_at  timestamptz default now()
@@ -126,6 +126,7 @@ create index users_status_idx on users(status);
 create index accounts_user_id_idx on accounts(user_id);
 create index banks_user_id_idx on banks(user_id);
 create index transactions_user_id_idx on transactions(user_id);
+create index transactions_bank_id_idx on transactions(bank_id);
 create index transactions_account_id_idx on transactions(account_id);
 create index budgets_user_id_idx on budgets(user_id);
 create index goals_user_id_idx on goals(user_id);

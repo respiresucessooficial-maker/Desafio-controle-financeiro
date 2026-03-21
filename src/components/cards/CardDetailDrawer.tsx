@@ -30,6 +30,10 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { Bank, Transaction } from '@/types';
+import {
+  getCardConfiguredAvailableLimit,
+  getCardInvoiceAmount,
+} from '@/lib/cardLimits';
 import BankCard from './BankCard';
 import AddCardModal from './AddCardModal';
 
@@ -42,6 +46,8 @@ const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 type DisplayTx = Transaction & { _instCount?: number; _instTotal?: number; _baseLabel?: string };
+type InvoiceStatus = 'paid' | 'open' | 'overdue';
+type InvoiceHistoryItem = { month: string; amount: number; status: InvoiceStatus; sortKey: string };
 
 function groupInstallments(txs: Transaction[]): DisplayTx[] {
   const seen = new Set<string>();
@@ -63,11 +69,14 @@ function formatDate(dateStr: string) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date);
 }
 
-const invoiceHistory = [
-  { month: 'Fevereiro/2026', amount: 1240.80, status: 'paid' },
-  { month: 'Janeiro/2026', amount: 987.40, status: 'paid' },
-  { month: 'Dezembro/2025', amount: 2130.60, status: 'paid' },
-];
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(date: Date) {
+  const formatted = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(date);
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
 
 interface Props {
   bank: Bank | null;
@@ -75,41 +84,34 @@ interface Props {
   onClose: () => void;
 }
 
-
-const MONTHS_PT = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-];
-
 export default function CardDetailDrawer({ bank, transactions, onClose }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [futureOpen, setFutureOpen] = useState(false);
 
   if (!bank) return null;
 
-  const cardTransactions = groupInstallments(
-    transactions.filter((t) => t.bankId === bank.id)
-  ).slice(0, 5);
+  const cardExpenseTransactions = transactions.filter((t) => t.bankId === bank.id && t.type === 'expense');
 
-  // Future invoices: transactions linked to this card dated after the current month
+  const cardTransactions = groupInstallments(cardExpenseTransactions).slice(0, 5);
+
   const now = new Date();
+  const currentMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonthKey = monthKey(currentMonthDate);
   const currentYearMonth = now.getFullYear() * 12 + now.getMonth();
 
-  const futureTransactions = transactions
+  const futureTransactions = cardExpenseTransactions
     .filter((t) => {
-      if (t.bankId !== bank.id) return false;
       const d = new Date(t.date + 'T00:00:00');
       return d.getFullYear() * 12 + d.getMonth() > currentYearMonth;
     })
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Group by year-month
   const futureByMonth = futureTransactions.reduce<Record<string, { label: string; total: number; items: Transaction[] }>>(
     (acc, t) => {
       const d = new Date(t.date + 'T00:00:00');
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const key = monthKey(d);
       if (!acc[key]) {
-        acc[key] = { label: `${MONTHS_PT[d.getMonth()]}/${d.getFullYear()}`, total: 0, items: [] };
+        acc[key] = { label: monthLabel(d), total: 0, items: [] };
       }
       acc[key].total += Math.abs(t.amount);
       acc[key].items.push(t);
@@ -119,14 +121,15 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
   );
 
   const creditLimit = bank.creditLimit ?? 0;
-  const creditUsed = bank.creditUsed ?? 0;
-  const creditAvailable = Math.max(0, creditLimit - creditUsed);
+  const creditUsed = getCardInvoiceAmount(bank);
+  const creditAvailableConfigured = getCardConfiguredAvailableLimit(bank);
+  const creditAvailable = Math.max(0, creditAvailableConfigured - creditUsed);
   const usagePct = creditLimit > 0 ? Math.min(100, (creditUsed / creditLimit) * 100) : 0;
 
   const barColor =
     usagePct >= 90 ? '#EF4444' : usagePct >= 70 ? '#F59E0B' : '#22C55E';
 
-  const statusConfig = {
+  const statusConfig: Record<InvoiceStatus, { label: string; icon: React.ElementType; color: string; bg: string }> = {
     paid: { label: 'Paga', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-500/10' },
     open: { label: 'Em aberto', icon: Clock, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-500/10' },
     overdue: { label: 'Atrasada', icon: AlertCircle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-500/10' },
@@ -135,11 +138,30 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
   const status = statusConfig[bank.invoiceStatus ?? 'open'];
   const StatusIcon = status.icon;
 
+  const paidInvoices = Object.values(
+    cardExpenseTransactions.reduce<Record<string, InvoiceHistoryItem>>((acc, tx) => {
+      const d = new Date(tx.date + 'T00:00:00');
+      const key = monthKey(d);
+      if (key >= currentMonthKey) return acc;
+      if (!acc[key]) {
+        acc[key] = { month: monthLabel(d), amount: 0, status: 'paid', sortKey: key };
+      }
+      acc[key].amount += Math.abs(tx.amount);
+      return acc;
+    }, {}),
+  ).sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+
+  const invoiceHistory: InvoiceHistoryItem[] = [
+    ...(creditUsed > 0 || bank.invoiceStatus !== 'paid'
+      ? [{ month: monthLabel(currentMonthDate), amount: creditUsed, status: bank.invoiceStatus ?? 'open', sortKey: currentMonthKey }]
+      : []),
+    ...paidInvoices,
+  ];
+
   return (
     <AnimatePresence>
       {bank && (
         <>
-          {/* Backdrop */}
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
@@ -149,7 +171,6 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
           />
 
-          {/* Drawer */}
           <motion.aside
             key="drawer"
             initial={{ x: '100%' }}
@@ -158,7 +179,6 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
             className="fixed right-0 top-0 h-full w-full max-w-[420px] bg-white dark:bg-card z-50 flex flex-col shadow-2xl overflow-y-auto styled-scrollbar"
           >
-            {/* Header */}
             <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
               <div>
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Detalhes</p>
@@ -169,7 +189,7 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                   onClick={() => setEditOpen(true)}
                   whileHover={{ scale: 1.08 }}
                   whileTap={{ scale: 0.92 }}
-                  title="Editar cartão"
+                  title="Editar cartao"
                   className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
                 >
                   <Pencil size={16} />
@@ -185,17 +205,15 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
               </div>
             </div>
 
-            {/* Card visual */}
             <div className="flex justify-center px-6 pb-6">
               <BankCard bank={bank} />
             </div>
 
             <div className="flex flex-col gap-4 px-6 pb-8">
-              {/* Credit limit bar */}
               {creditLimit > 0 && (
                 <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Limite do cartão</span>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Limite do cartao</span>
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{usagePct.toFixed(0)}% usado</span>
                   </div>
 
@@ -215,7 +233,7 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                       <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{fmt(creditUsed)}</p>
                     </div>
                     <div className="text-center border-x border-slate-200 dark:border-white/10">
-                      <p className="text-[10px] text-slate-400 mb-0.5">Disponível</p>
+                      <p className="text-[10px] text-slate-400 mb-0.5">Disponivel</p>
                       <p className="text-sm font-bold text-green-600 dark:text-green-400">{fmt(creditAvailable)}</p>
                     </div>
                     <div className="text-center">
@@ -226,7 +244,6 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                 </div>
               )}
 
-              {/* Invoice info */}
               <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-4">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Fatura atual</p>
 
@@ -246,30 +263,29 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                     <Calendar size={15} className="text-slate-400 flex-shrink-0" />
                     <div>
                       <p className="text-[10px] text-slate-400">Fechamento</p>
-                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{bank.closingDay ? `Dia ${bank.closingDay}` : '—'}</p>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{bank.closingDay ? `Dia ${bank.closingDay}` : '-'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5 p-3 bg-white dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/8">
                     <TrendingDown size={15} className="text-slate-400 flex-shrink-0" />
                     <div>
                       <p className="text-[10px] text-slate-400">Vencimento</p>
-                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{bank.dueDay ? `Dia ${bank.dueDay}` : '—'}</p>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{bank.dueDay ? `Dia ${bank.dueDay}` : '-'}</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Recent transactions */}
               <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <CreditCard size={14} className="text-slate-400" />
                   <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    Últimos gastos neste cartão
+                    Ultimos gastos neste cartao
                   </p>
                 </div>
 
                 {cardTransactions.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-4">Nenhuma transação neste cartão</p>
+                  <p className="text-sm text-slate-400 text-center py-4">Nenhuma transacao neste cartao</p>
                 ) : (
                   <div className="flex flex-col gap-0.5">
                     {cardTransactions.map((tx, i) => {
@@ -310,7 +326,6 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                 )}
               </div>
 
-              {/* Future invoices */}
               {Object.keys(futureByMonth).length > 0 && (
                 <div className="bg-slate-50 dark:bg-white/5 rounded-2xl">
                   <button
@@ -324,7 +339,7 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                         Faturas futuras
                       </p>
                       <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">
-                        {Object.keys(futureByMonth).length} {Object.keys(futureByMonth).length === 1 ? 'mês' : 'meses'}
+                        {Object.keys(futureByMonth).length} {Object.keys(futureByMonth).length === 1 ? 'mes' : 'meses'}
                       </span>
                     </div>
                     <motion.div animate={{ rotate: futureOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
@@ -344,12 +359,10 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                         <div className="px-4 pb-4 flex flex-col gap-3">
                           {Object.entries(futureByMonth).map(([key, month]) => (
                             <div key={key} className="bg-white dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/8 overflow-hidden">
-                              {/* Month header */}
                               <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100 dark:border-white/8">
                                 <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{month.label}</p>
-                                <p className="text-xs font-bold text-red-500 dark:text-red-400">−{fmt(month.total)}</p>
+                                <p className="text-xs font-bold text-red-500 dark:text-red-400">-{fmt(month.total)}</p>
                               </div>
-                              {/* Transactions */}
                               <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
                                 {month.items.map((tx) => {
                                   const Icon = iconMap[tx.icon] ?? ShoppingCart;
@@ -373,36 +386,34 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                 </div>
               )}
 
-              {/* Invoice history */}
               <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-4">
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Histórico de faturas</p>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Historico de faturas</p>
 
-                <div className="flex flex-col gap-0.5">
-                  {/* Current open/overdue invoice */}
-                  <div className="flex items-center justify-between py-2.5">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">Março/2026</p>
-                      <p className={`text-[10px] font-medium ${status.color}`}>{status.label}</p>
-                    </div>
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{fmt(creditUsed)}</p>
-                  </div>
-
-                  {invoiceHistory.map((inv, i) => (
-                    <div key={inv.month}>
-                      <div className="h-px bg-slate-100 dark:bg-white/5" />
-                      <div className="flex items-center justify-between py-2.5">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">{inv.month}</p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <CheckCircle2 size={10} className="text-green-500" />
-                            <p className="text-[10px] font-medium text-green-600 dark:text-green-400">Paga</p>
+                {invoiceHistory.length === 0 ? (
+                  <p className="py-2 text-sm text-slate-400">Nenhuma fatura encontrada para este cartao.</p>
+                ) : (
+                  <div className="flex flex-col gap-0.5">
+                    {invoiceHistory.map((inv, i) => {
+                      const invoiceVisual = statusConfig[inv.status];
+                      const InvoiceIcon = invoiceVisual.icon;
+                      return (
+                        <div key={`${inv.sortKey}-${inv.status}`}>
+                          {i > 0 && <div className="h-px bg-slate-100 dark:bg-white/5" />}
+                          <div className="flex items-center justify-between py-2.5">
+                            <div>
+                              <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">{inv.month}</p>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <InvoiceIcon size={10} className={invoiceVisual.color} />
+                                <p className={`text-[10px] font-medium ${invoiceVisual.color}`}>{invoiceVisual.label}</p>
+                              </div>
+                            </div>
+                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{fmt(inv.amount)}</p>
                           </div>
                         </div>
-                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{fmt(inv.amount)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </motion.aside>

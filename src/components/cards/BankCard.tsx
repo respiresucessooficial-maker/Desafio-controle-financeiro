@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Bank } from '@/types';
+import { getCardConfiguredAvailableLimit, getCardInvoiceAmount } from '@/lib/cardLimits';
 
 function VisaLogo({ size = 20 }: { size?: number }) {
   const w = Math.round(size * 2.6);
@@ -72,16 +73,17 @@ interface BankCardProps {
   compact?: boolean;
   onClick?: () => void;
   showCreditBar?: boolean;
+  currentUsedAmount?: number;
 }
 
-export default function BankCard({ bank, compact = false, onClick, showCreditBar = false }: BankCardProps) {
+export default function BankCard({ bank, compact = false, onClick, showCreditBar = false, currentUsedAmount }: BankCardProps) {
   const formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const approvedLimit = bank.creditLimit ?? 0;
-  const invoiceCurrent = bank.creditUsed ?? 0;
-  const availableConfigured = bank.balance ?? 0;
+  const invoiceCurrent = currentUsedAmount ?? getCardInvoiceAmount(bank);
+  const availableConfigured = getCardConfiguredAvailableLimit(bank);
   const availableRemaining = Math.max(0, availableConfigured - invoiceCurrent);
-  const usagePct = availableConfigured > 0 ? Math.min(100, (invoiceCurrent / availableConfigured) * 100) : 0;
+  const usagePct = approvedLimit > 0 ? Math.min(100, (invoiceCurrent / approvedLimit) * 100) : 0;
   const barColor = usagePct >= 90 ? '#EF4444' : usagePct >= 70 ? '#F59E0B' : '#22C55E';
 
   const statusLabel = {

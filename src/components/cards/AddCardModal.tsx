@@ -9,6 +9,7 @@ import { INSTITUTIONS, Institution } from '@/data/institutions';
 import InstitutionTile from '@/components/ui/InstitutionTile';
 import { formatCurrencyInput, parseCurrencyInput } from '@/lib/currencyInput';
 import { getInstitutionLogoSources } from '@/utils/logoSources';
+import { getCardCurrentInvoiceFromTransactions } from '@/lib/cardLimits';
 
 function InstitutionLogo({ inst }: { inst: Institution }) {
   const sources = getInstitutionLogoSources(inst);
@@ -101,7 +102,7 @@ interface Props {
 }
 
 export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
-  const { addBank, updateBank, deleteBank, accounts } = useAppData();
+  const { addBank, updateBank, deleteBank, accounts, transactions } = useAppData();
   const [form, setForm] = useState(emptyForm);
   const [selectedId, setSelectedId] = useState<string>('');
   const [search, setSearch] = useState('');
@@ -121,8 +122,8 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
         code: editBank.code,
         number: editBank.number.replace(/\*/g, '').trim(),
         balance: formatCurrencyInput(String(Math.round(editBank.balance * 100))),
-        creditLimit: editBank.creditLimit ? formatCurrencyInput(String(Math.round(editBank.creditLimit * 100))) : '',
-        creditUsed: editBank.creditUsed ? formatCurrencyInput(String(Math.round(editBank.creditUsed * 100))) : '',
+        creditLimit: editBank.creditLimit != null ? formatCurrencyInput(String(Math.round(editBank.creditLimit * 100))) : '',
+        creditUsed: editBank.creditUsed != null ? formatCurrencyInput(String(Math.round(editBank.creditUsed * 100))) : '',
         closingDay: editBank.closingDay ? String(editBank.closingDay) : '',
         dueDay: editBank.dueDay ? String(editBank.dueDay) : '',
         colorIndex: colorIndex >= 0 ? colorIndex : 0,
@@ -165,6 +166,10 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
     const closingDay = parseInt(form.closingDay);
     const dueDay = parseInt(form.dueDay);
     if (!form.name || isNaN(balance)) return;
+    const launchedAmount = editBank ? getCardCurrentInvoiceFromTransactions(transactions, editBank.id) : 0;
+    const baseInvoiceAmount = form.invoiceStatus === 'paid'
+      ? 0
+      : Math.max(0, creditUsed - launchedAmount);
 
     const custom = selectedId === 'outro' ? CUSTOM_COLORS[form.colorIndex] : null;
     const color = inst ? inst.color : custom?.value ?? CUSTOM_COLORS[0].value;
@@ -189,7 +194,7 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
       closingDay: isNaN(closingDay) ? undefined : closingDay,
       dueDay: isNaN(dueDay) ? undefined : dueDay,
       invoiceStatus: form.invoiceStatus,
-      lastInvoiceAmount: editBank?.lastInvoiceAmount,
+      lastInvoiceAmount: isNaN(creditUsed) ? undefined : baseInvoiceAmount,
       accountId: form.accountId || undefined,
     };
 
@@ -437,10 +442,13 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
                       <input type="text" inputMode="decimal" value={form.balance} onChange={(e) => set('balance', formatCurrencyInput(e.target.value))} placeholder="0,00" required className={`${inputCls} font-bold`} />
                     </div>
 
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Limite de credito aprovado (R$)</label>
-                      <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Limite de credito aprovado (R$)</label>
                         <input type="text" inputMode="decimal" value={form.creditLimit} onChange={(e) => set('creditLimit', formatCurrencyInput(e.target.value))} placeholder="Limite aprovado" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Fatura atual (R$)</label>
                         <input type="text" inputMode="decimal" value={form.creditUsed} onChange={(e) => set('creditUsed', formatCurrencyInput(e.target.value))} placeholder="Fatura atual" className={inputCls} />
                       </div>
                     </div>

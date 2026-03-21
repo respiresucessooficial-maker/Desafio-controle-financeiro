@@ -172,6 +172,45 @@ function transactionToRow(t: Transaction, userId: string) {
   };
 }
 
+function isSameYearMonth(dateStr: string, baseDate: Date) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.getFullYear() === baseDate.getFullYear() && d.getMonth() === baseDate.getMonth();
+}
+
+function getCurrentInvoiceAmount(transactions: Transaction[], bankId: string, baseDate = new Date()) {
+  return transactions.reduce((sum, tx) => {
+    if (tx.bankId !== bankId || tx.type !== 'expense') return sum;
+    if (!isSameYearMonth(tx.date, baseDate)) return sum;
+    return sum + Math.abs(tx.amount);
+  }, 0);
+}
+
+function buildBankInvoiceFields(bank: Bank, transactions: Transaction[], baseDate = new Date()) {
+  const launchedAmount = getCurrentInvoiceAmount(transactions, bank.id, baseDate);
+  const inferredBaseFromCurrentUsed = Math.max(0, (bank.creditUsed ?? 0) - launchedAmount);
+  const baseInvoiceAmount =
+    bank.invoiceStatus === 'paid'
+      ? 0
+      : bank.lastInvoiceAmount != null
+        ? (bank.lastInvoiceAmount === bank.creditUsed && launchedAmount > 0
+            ? inferredBaseFromCurrentUsed
+            : bank.lastInvoiceAmount)
+        : (bank.creditUsed ?? inferredBaseFromCurrentUsed);
+  const creditUsed = baseInvoiceAmount + launchedAmount;
+  const invoiceStatus =
+    creditUsed <= 0
+      ? 'paid'
+      : bank.invoiceStatus === 'overdue'
+        ? 'overdue'
+        : 'open';
+
+  return {
+    creditUsed,
+    lastInvoiceAmount: baseInvoiceAmount,
+    invoiceStatus,
+  } as const;
+}
+
 function rowToBudget(r: any): Budget {
   return { id: r.id, category: r.category, limit: Number(r.limit_amount), color: r.color };
 }
@@ -252,6 +291,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const userId = useRef<string>('');
   const categoriesRef = useRef<CategoryDef[]>(CATEGORIES);
+  const transactionsRef = useRef<Transaction[]>([]);
+  const banksRef = useRef<Bank[]>([]);
 
   const categories: CategoryDef[] = [...CATEGORIES, ...customCategories];
 
@@ -259,6 +300,44 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     categoriesRef.current = categories;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customCategories]);
+
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
+
+  useEffect(() => {
+    banksRef.current = banks;
+  }, [banks]);
+
+  const syncBankInvoices = useCallback((nextTransactions: Transaction[], targetBankIds?: Array<string | undefined>) => {
+    const ids = new Set((targetBankIds ?? []).filter((id): id is string => !!id));
+    if (ids.size === 0) return;
+
+    const currentBanks = banksRef.current;
+    const invoiceFieldsByBankId = new Map<string, ReturnType<typeof buildBankInvoiceFields>>();
+    const nextBanks = currentBanks.map((bank) => {
+      if (!ids.has(bank.id)) return bank;
+      const invoiceFields = buildBankInvoiceFields(bank, nextTransactions);
+      invoiceFieldsByBankId.set(bank.id, invoiceFields);
+      return { ...bank, ...invoiceFields };
+    });
+
+    banksRef.current = nextBanks;
+    setBanks(nextBanks);
+
+    nextBanks
+      .filter((bank) => ids.has(bank.id))
+      .forEach((bank) => {
+        const invoiceFields = invoiceFieldsByBankId.get(bank.id);
+        if (!invoiceFields) return;
+        supabase.from('banks').update({
+          credit_used: invoiceFields.creditUsed,
+          last_invoice_amount: invoiceFields.lastInvoiceAmount,
+          invoice_status: invoiceFields.invoiceStatus,
+        }).eq('id', bank.id).eq('user_id', userId.current)
+          .then(({ error }) => { if (error) console.error('[syncBankInvoices]', error); });
+      });
+  }, []);
 
   async function loadForUser(uid: string) {
     userId.current = uid;
@@ -280,9 +359,32 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (bankErr)   console.error('[loadForUser] banks:',        bankErr);
     if (goalErr)   console.error('[loadForUser] goals:',        goalErr);
     if (accErr)    console.error('[loadForUser] accounts:',     accErr);
-    setTransactions((txData ?? []).map(rowToTransaction));
+    const nextTransactions = (txData ?? []).map(rowToTransaction);
+    transactionsRef.current = nextTransactions;
+    setTransactions(nextTransactions);
     setBudgets(dedupeBudgetsByCategory((budgetData ?? []).map(rowToBudget)));
-    setBanks(hydrateNetworks((bankData ?? []).map(rowToBank)));
+    const hydratedBanks = hydrateNetworks((bankData ?? []).map(rowToBank));
+    const reconciledBanks = hydratedBanks.map((bank) => ({
+      ...bank,
+      ...buildBankInvoiceFields(bank, nextTransactions),
+    }));
+    banksRef.current = reconciledBanks;
+    setBanks(reconciledBanks);
+    hydratedBanks.forEach((bank) => {
+      const invoiceFields = buildBankInvoiceFields(bank, nextTransactions);
+      if (
+        bank.creditUsed !== invoiceFields.creditUsed ||
+        bank.lastInvoiceAmount !== invoiceFields.lastInvoiceAmount ||
+        bank.invoiceStatus !== invoiceFields.invoiceStatus
+      ) {
+        supabase.from('banks').update({
+          credit_used: invoiceFields.creditUsed,
+          last_invoice_amount: invoiceFields.lastInvoiceAmount,
+          invoice_status: invoiceFields.invoiceStatus,
+        }).eq('id', bank.id).eq('user_id', uid)
+          .then(({ error }) => { if (error) console.error('[loadForUser:syncBankInvoices]', error); });
+      }
+    });
     const localGoalHistory = readGoalHistory(uid);
     setGoals(
       (goalData ?? []).map(rowToGoal).map((goal) => ({
@@ -317,7 +419,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const addTransaction = useCallback((t: Omit<Transaction, 'id'>, opts?: { skipBalanceUpdate?: boolean }): Transaction => {
     const catDef = categoriesRef.current.find((c) => c.name === t.category) ?? getCategoryDef(t.category);
     const newT: Transaction = { ...t, id: genId(), icon: t.icon || catDef.icon, color: t.color || catDef.color };
-    setTransactions((prev) => [newT, ...prev]);
+    const nextTransactions = [newT, ...transactionsRef.current];
+    transactionsRef.current = nextTransactions;
+    setTransactions(nextTransactions);
     if (newT.accountId && !opts?.skipBalanceUpdate) {
       setAccounts((prev) => prev.map((a) => {
         if (a.id !== newT.accountId) return a;
@@ -328,27 +432,35 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         return { ...a, balance: newBalance };
       }));
     }
+    if (newT.bankId) syncBankInvoices(nextTransactions, [newT.bankId]);
     supabase.from('transactions').insert(transactionToRow(newT, userId.current))
       .then(({ error }) => { if (error) console.error('[addTransaction]', error); });
     return newT;
-  }, []);
+  }, [syncBankInvoices]);
 
   const updateTransaction = useCallback((id: string, data: Partial<Omit<Transaction, 'id'>>) => {
-    setTransactions((prev) => {
-      const old = prev.find((t) => t.id === id);
-      if (old?.accountId && 'amount' in data && data.amount !== old.amount) {
-        const delta = data.amount! - old.amount;
-        setAccounts((accounts) => accounts.map((a) => {
-          if (a.id !== old.accountId) return a;
-          const newBalance = a.balance + delta;
-          supabase.from('accounts').update({ balance: newBalance })
-            .eq('id', a.id).eq('user_id', userId.current)
-            .then(({ error }) => { if (error) console.error('[updateTransaction:balance]', error); });
-          return { ...a, balance: newBalance };
-        }));
-      }
-      return prev.map((t) => (t.id === id ? { ...t, ...data } : t));
-    });
+    const old = transactionsRef.current.find((t) => t.id === id);
+    if (!old) return;
+
+    const updated = { ...old, ...data };
+    const nextTransactions = transactionsRef.current.map((t) => (t.id === id ? updated : t));
+    transactionsRef.current = nextTransactions;
+    setTransactions(nextTransactions);
+
+    if (old.accountId && 'amount' in data && data.amount !== old.amount) {
+      const delta = data.amount! - old.amount;
+      setAccounts((accounts) => accounts.map((a) => {
+        if (a.id !== old.accountId) return a;
+        const newBalance = a.balance + delta;
+        supabase.from('accounts').update({ balance: newBalance })
+          .eq('id', a.id).eq('user_id', userId.current)
+          .then(({ error }) => { if (error) console.error('[updateTransaction:balance]', error); });
+        return { ...a, balance: newBalance };
+      }));
+    }
+
+    syncBankInvoices(nextTransactions, [old.bankId, updated.bankId]);
+
     const row: Record<string, unknown> = {};
     if ('label'       in data) row.label       = data.label;
     if ('amount'      in data) row.amount       = data.amount;
@@ -362,26 +474,27 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (Object.keys(row).length > 0)
       supabase.from('transactions').update(row).eq('id', id).eq('user_id', userId.current)
         .then(({ error }) => { if (error) console.error('[updateTransaction]', error); });
-  }, []);
+  }, [syncBankInvoices]);
 
   const deleteTransaction = useCallback((id: string) => {
-    setTransactions((prev) => {
-      const t = prev.find((tx) => tx.id === id);
-      if (t?.accountId) {
-        setAccounts((accounts) => accounts.map((a) => {
-          if (a.id !== t.accountId) return a;
-          const newBalance = a.balance - t.amount;
-          supabase.from('accounts').update({ balance: newBalance })
-            .eq('id', a.id).eq('user_id', userId.current)
-            .then(({ error }) => { if (error) console.error('[deleteTransaction:balance]', error); });
-          return { ...a, balance: newBalance };
-        }));
-      }
-      return prev.filter((tx) => tx.id !== id);
-    });
+    const t = transactionsRef.current.find((tx) => tx.id === id);
+    const nextTransactions = transactionsRef.current.filter((tx) => tx.id !== id);
+    transactionsRef.current = nextTransactions;
+    setTransactions(nextTransactions);
+    if (t?.accountId) {
+      setAccounts((accounts) => accounts.map((a) => {
+        if (a.id !== t.accountId) return a;
+        const newBalance = a.balance - t.amount;
+        supabase.from('accounts').update({ balance: newBalance })
+          .eq('id', a.id).eq('user_id', userId.current)
+          .then(({ error }) => { if (error) console.error('[deleteTransaction:balance]', error); });
+        return { ...a, balance: newBalance };
+      }));
+    }
+    if (t?.bankId) syncBankInvoices(nextTransactions, [t.bankId]);
     supabase.from('transactions').delete().eq('id', id).eq('user_id', userId.current)
       .then(({ error }) => { if (error) console.error('[deleteTransaction]', error); });
-  }, []);
+  }, [syncBankInvoices]);
 
   // ── Budgets ────────────────────────────────────────────────────────────────
   const setBudget = useCallback((b: Omit<Budget, 'id'>) => {
@@ -418,13 +531,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   // ── Banks (cards) ──────────────────────────────────────────────────────────
   const addBank = useCallback((b: Omit<Bank, 'id'>) => {
     const newB: Bank = { ...b, id: genId() };
-    setBanks((prev) => [...prev, newB]);
+    const nextBanks = [...banksRef.current, newB];
+    banksRef.current = nextBanks;
+    setBanks(nextBanks);
     supabase.from('banks').insert(bankToRow(newB, userId.current))
       .then(({ error }) => { if (error) console.error('[addBank]', error); });
   }, []);
 
   const updateBank = useCallback((id: string, data: Partial<Omit<Bank, 'id'>>) => {
-    setBanks((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
+    const nextBanks = banksRef.current.map((b) => (b.id === id ? { ...b, ...data } : b));
+    banksRef.current = nextBanks;
+    setBanks(nextBanks);
     const row: Record<string, unknown> = {};
     if ('name'              in data) row.name                = data.name;
     if ('brand'             in data) row.brand               = data.brand;
@@ -449,7 +566,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteBank = useCallback((id: string) => {
-    setBanks((prev) => prev.filter((b) => b.id !== id));
+    const nextBanks = banksRef.current.filter((b) => b.id !== id);
+    banksRef.current = nextBanks;
+    setBanks(nextBanks);
+    const nextTransactions = transactionsRef.current.filter((tx) => tx.bankId !== id);
+    transactionsRef.current = nextTransactions;
+    setTransactions(nextTransactions);
+    supabase.from('transactions').delete().eq('bank_id', id).eq('user_id', userId.current)
+      .then(({ error }) => { if (error) console.error('[deleteBank:transactions]', error); });
     supabase.from('banks').delete().eq('id', id).eq('user_id', userId.current)
       .then(({ error }) => { if (error) console.error('[deleteBank]', error); });
   }, []);

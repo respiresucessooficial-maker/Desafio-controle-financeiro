@@ -23,6 +23,18 @@ async function findAuthUserByEmail(
 }
 
 export async function POST(request: Request) {
+  try {
+    return await handleRegister(request);
+  } catch (err: unknown) {
+    console.error('[register] unhandled error:', err);
+    return NextResponse.json(
+      { error: 'Erro interno no servidor. Tente novamente.' },
+      { status: 500 },
+    );
+  }
+}
+
+async function handleRegister(request: Request) {
   const body = await request.json() as RegisterPayload;
   const name = body.name?.trim() ?? '';
   const email = body.email?.trim().toLowerCase() ?? '';
@@ -149,6 +161,7 @@ export async function POST(request: Request) {
       email,
       full_name: name,
       status: USER_ACCESS_STATUS.active,
+      plan: 'free',
       registered_at: new Date().toISOString(),
     })
     .eq('id', pendingUser.id);

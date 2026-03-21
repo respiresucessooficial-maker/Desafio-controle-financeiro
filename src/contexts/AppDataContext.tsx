@@ -66,6 +66,7 @@ function removeGoalHistory(uid: string, goalId: string) {
 
 // ── Custom categories ─────────────────────────────────────────────────────────
 export interface CustomCategory {
+  id: string;
   name: string;
   icon: string;
   color: string;
@@ -73,24 +74,34 @@ export interface CustomCategory {
   isCustom: true;
 }
 
-function customCategoriesKey(uid: string) {
-  return `custom-categories:${uid}`;
+function rowToCustomCategory(r: any): CustomCategory {
+  return {
+    id: r.id,
+    name: r.name,
+    icon: r.icon,
+    color: r.color,
+    type: r.type,
+    isCustom: true,
+  };
 }
 
-function readCustomCategories(uid: string): CustomCategory[] {
+/** Legacy: read from localStorage for one-time migration */
+function readLegacyCustomCategories(uid: string): Omit<CustomCategory, 'id' | 'isCustom'>[] {
   if (typeof window === 'undefined' || !uid) return [];
   try {
-    const raw = window.localStorage.getItem(customCategoriesKey(uid));
+    const key = `custom-categories:${uid}`;
+    const raw = window.localStorage.getItem(key);
     if (!raw) return [];
-    return (JSON.parse(raw) as CustomCategory[]) ?? [];
+    const parsed = JSON.parse(raw) as Array<{ name: string; icon: string; color: string; type: string }>;
+    return parsed.map((c) => ({ name: c.name, icon: c.icon, color: c.color, type: c.type as 'expense' | 'income' }));
   } catch {
     return [];
   }
 }
 
-function saveCustomCategories(uid: string, cats: CustomCategory[]) {
+function clearLegacyCustomCategories(uid: string) {
   if (typeof window === 'undefined' || !uid) return;
-  window.localStorage.setItem(customCategoriesKey(uid), JSON.stringify(cats));
+  window.localStorage.removeItem(`custom-categories:${uid}`);
 }
 
 // ── ID generation ─────────────────────────────────────────────────────────────
@@ -159,6 +170,7 @@ function rowToTransaction(r: any): Transaction {
     bankId: r.bank_id ?? undefined,
     accountId: r.account_id ?? undefined,
     description: r.description ?? undefined,
+    paymentType: r.payment_type ?? undefined,
   };
 }
 function transactionToRow(t: Transaction, userId: string) {
@@ -169,6 +181,7 @@ function transactionToRow(t: Transaction, userId: string) {
     bank_id: t.bankId ?? null,
     account_id: t.accountId ?? null,
     description: t.description ?? null,
+    payment_type: t.paymentType ?? null,
   };
 }
 
@@ -180,6 +193,7 @@ function isSameYearMonth(dateStr: string, baseDate: Date) {
 function getCurrentInvoiceAmount(transactions: Transaction[], bankId: string, baseDate = new Date()) {
   return transactions.reduce((sum, tx) => {
     if (tx.bankId !== bankId || tx.type !== 'expense') return sum;
+    if (tx.accountId) return sum; // débito: já descontou do saldo da conta, não afeta fatura
     if (!isSameYearMonth(tx.date, baseDate)) return sum;
     return sum + Math.abs(tx.amount);
   }, 0);
@@ -347,18 +361,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       { data: bankData,   error: bankErr   },
       { data: goalData,   error: goalErr   },
       { data: accData,    error: accErr    },
+      { data: catData,    error: catErr    },
     ] = await Promise.all([
       supabase.from('transactions').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
       supabase.from('budgets').select('*').eq('user_id', uid),
       supabase.from('banks').select('*').eq('user_id', uid),
       supabase.from('goals').select('*').eq('user_id', uid),
       supabase.from('accounts').select('*').eq('user_id', uid),
+      supabase.from('custom_categories').select('*').eq('user_id', uid).order('created_at', { ascending: true }),
     ]);
     if (txErr)     console.error('[loadForUser] transactions:', txErr);
     if (budgetErr) console.error('[loadForUser] budgets:',      budgetErr);
     if (bankErr)   console.error('[loadForUser] banks:',        bankErr);
     if (goalErr)   console.error('[loadForUser] goals:',        goalErr);
     if (accErr)    console.error('[loadForUser] accounts:',     accErr);
+    if (catErr)    console.error('[loadForUser] custom_categories:', catErr);
     const nextTransactions = (txData ?? []).map(rowToTransaction);
     transactionsRef.current = nextTransactions;
     setTransactions(nextTransactions);
@@ -393,7 +410,24 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       })),
     );
     setAccounts((accData ?? []).map(rowToAccount));
-    setCustomCategories(readCustomCategories(uid));
+
+    // ── Custom categories: load from Supabase, migrate from localStorage if needed ──
+    let loadedCategories = (catData ?? []).map(rowToCustomCategory);
+    if (loadedCategories.length === 0) {
+      const legacy = readLegacyCustomCategories(uid);
+      if (legacy.length > 0) {
+        const migrated = legacy.map((c) => ({ ...c, id: genId(), user_id: uid }));
+        const { data: inserted } = await supabase
+          .from('custom_categories')
+          .insert(migrated)
+          .select();
+        if (inserted) {
+          loadedCategories = inserted.map(rowToCustomCategory);
+          clearLegacyCustomCategories(uid);
+        }
+      }
+    }
+    setCustomCategories(loadedCategories);
     setLoaded(true);
   }
 
@@ -645,27 +679,33 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Custom categories ───────────────────────────────────────────────────────
-  const addCategory = useCallback((c: Omit<CustomCategory, 'isCustom'>) => {
-    setCustomCategories((prev) => {
-      const next = [...prev, { ...c, isCustom: true as const }];
-      saveCustomCategories(userId.current, next);
-      return next;
-    });
+  const addCategory = useCallback((c: Omit<CustomCategory, 'id' | 'isCustom'>) => {
+    const newCat: CustomCategory = { ...c, id: genId(), isCustom: true };
+    setCustomCategories((prev) => [...prev, newCat]);
+    supabase.from('custom_categories').insert({
+      id: newCat.id, user_id: userId.current,
+      name: newCat.name, icon: newCat.icon, color: newCat.color, type: newCat.type,
+    }).then(({ error }) => { if (error) console.error('[addCategory]', error); });
   }, []);
 
   const updateCategory = useCallback((name: string, data: Partial<Pick<CustomCategory, 'name' | 'icon' | 'color'>>) => {
     setCustomCategories((prev) => {
-      const next = prev.map((c) => (c.name === name ? { ...c, ...data } : c));
-      saveCustomCategories(userId.current, next);
-      return next;
+      const target = prev.find((c) => c.name === name);
+      if (!target) return prev;
+      supabase.from('custom_categories').update(data).eq('id', target.id).eq('user_id', userId.current)
+        .then(({ error }) => { if (error) console.error('[updateCategory]', error); });
+      return prev.map((c) => (c.name === name ? { ...c, ...data } : c));
     });
   }, []);
 
   const deleteCategory = useCallback((name: string) => {
     setCustomCategories((prev) => {
-      const next = prev.filter((c) => c.name !== name);
-      saveCustomCategories(userId.current, next);
-      return next;
+      const target = prev.find((c) => c.name === name);
+      if (target) {
+        supabase.from('custom_categories').delete().eq('id', target.id).eq('user_id', userId.current)
+          .then(({ error }) => { if (error) console.error('[deleteCategory]', error); });
+      }
+      return prev.filter((c) => c.name !== name);
     });
   }, []);
 

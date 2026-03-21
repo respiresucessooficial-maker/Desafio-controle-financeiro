@@ -39,6 +39,8 @@ export interface Bank {
   accountId?: string;
 }
 
+export type PaymentType = 'pix' | 'debit' | 'credit';
+
 export interface Transaction {
   id: string;
   label: string;
@@ -51,6 +53,7 @@ export interface Transaction {
   bankId?: string;
   accountId?: string;
   description?: string;
+  paymentType?: PaymentType;
 }
 
 export interface Budget {
@@ -87,6 +90,13 @@ export interface CategoryData {
   name: string;
   value: number;
   color: string;
+}
+
+export type PlanName = 'free' | 'basic' | 'premium';
+
+export interface UserPlan {
+  plan: PlanName;
+  expiresAt: string | null; // ISO date or null = never expires
 }
 
 export type AlertSeverity = 'info' | 'warning' | 'error';

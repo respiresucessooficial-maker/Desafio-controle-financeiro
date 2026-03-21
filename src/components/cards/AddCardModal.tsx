@@ -153,10 +153,10 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
   }
 
   const inst = useMemo(() => INSTITUTIONS.find((p) => p.id === selectedId), [selectedId]);
-  const linkedAccounts = useMemo(
-    () => accounts.filter((a) => a.code === inst?.code || a.institutionId === selectedId),
-    [accounts, inst, selectedId],
-  );
+  const linkedAccounts = useMemo(() => {
+    if (selectedId === 'outro') return accounts;
+    return accounts.filter((a) => a.code === inst?.code || a.institutionId === selectedId);
+  }, [accounts, inst, selectedId]);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -404,7 +404,7 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
                       </div>
                     )}
 
-                    {selectedId !== 'outro' && inst && (
+                    {showForm && (
                       <div>
                         <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Conta vinculada</label>
                         {linkedAccounts.length > 0 ? (
@@ -426,7 +426,7 @@ export default function AddCardModal({ isOpen, onClose, editBank }: Props) {
                           </div>
                         ) : (
                           <p className="text-xs italic text-slate-400 dark:text-slate-500">
-                            Nenhuma conta cadastrada para este banco
+                            Nenhuma conta cadastrada. Crie uma conta primeiro.
                           </p>
                         )}
                       </div>

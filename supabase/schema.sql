@@ -1,6 +1,8 @@
 -- ============================================================
 -- Desafio Controle Financeiro - Supabase Schema
--- Run this in the Supabase SQL Editor
+-- ⚠️  ATENÇÃO: Este arquivo APAGA TODOS OS DADOS e recria o banco do zero.
+--     Use APENAS para criar um novo ambiente (dev/staging).
+--     Para atualizar um banco existente, use os arquivos em migrations/
 -- ============================================================
 
 -- Drop existing tables (clean slate)
@@ -9,6 +11,7 @@ drop table if exists banks cascade;
 drop table if exists accounts cascade;
 drop table if exists budgets cascade;
 drop table if exists goals cascade;
+drop table if exists custom_categories cascade;
 drop table if exists users cascade;
 
 -- Tables
@@ -22,7 +25,10 @@ create table users (
   source          text not null default 'manual',
   kiwify_order_id text,
   kiwify_payload  jsonb,
+  plan            text not null default 'free' check (plan in ('free', 'basic', 'premium')),
+  plan_expires_at timestamptz,
   registered_at   timestamptz,
+  updated_at      timestamptz,
   created_at      timestamptz default now()
 );
 
@@ -77,10 +83,11 @@ create table transactions (
   type        text not null,
   icon        text not null,
   color       text not null,
-  bank_id     text references banks(id) on delete cascade,
-  account_id  text references accounts(id) on delete set null,
-  description text,
-  created_at  timestamptz default now()
+  bank_id      text references banks(id) on delete cascade,
+  account_id   text references accounts(id) on delete set null,
+  description  text,
+  payment_type text check (payment_type in ('pix', 'debit', 'credit')),
+  created_at   timestamptz default now()
 );
 
 create table budgets (
@@ -90,6 +97,16 @@ create table budgets (
   limit_amount numeric not null,
   color        text not null,
   created_at   timestamptz default now()
+);
+
+create table custom_categories (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references users(id) on delete cascade,
+  name       text not null,
+  icon       text not null default 'tag',
+  color      text not null default '#6b7280',
+  updated_at timestamptz,
+  created_at timestamptz default now()
 );
 
 create table goals (
@@ -104,6 +121,23 @@ create table goals (
   history     jsonb not null default '[]'::jsonb,
   created_at  timestamptz default now()
 );
+
+-- updated_at trigger function
+create or replace function set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create trigger set_users_updated_at
+  before update on users
+  for each row execute function set_updated_at();
+
+create trigger set_custom_categories_updated_at
+  before update on custom_categories
+  for each row execute function set_updated_at();
 
 create or replace function public.hard_delete_auth_user(target_user_id uuid)
 returns boolean
@@ -130,6 +164,7 @@ create index transactions_bank_id_idx on transactions(bank_id);
 create index transactions_account_id_idx on transactions(account_id);
 create index budgets_user_id_idx on budgets(user_id);
 create index goals_user_id_idx on goals(user_id);
+create index custom_categories_user_id_idx on custom_categories(user_id);
 
 -- Row Level Security
 alter table users enable row level security;
@@ -138,6 +173,7 @@ alter table banks enable row level security;
 alter table transactions enable row level security;
 alter table budgets enable row level security;
 alter table goals enable row level security;
+alter table custom_categories enable row level security;
 
 -- Each user can only see and manage their own data
 create policy "users: own data"
@@ -163,3 +199,12 @@ create policy "budgets: own data"
 create policy "goals: own data"
   on goals for all
   using (auth.uid()::text = user_id);
+
+create policy "custom_categories: own data"
+  on custom_categories for all
+  using (
+    user_id = (select id from users where auth_user_id = auth.uid())
+  )
+  with check (
+    user_id = (select id from users where auth_user_id = auth.uid())
+  );

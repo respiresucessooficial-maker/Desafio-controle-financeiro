@@ -110,11 +110,13 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
   const [installments, setInstallments] = useState(1);
   const [openDropdown, setOpenDropdown] = useState<'category' | 'account' | 'card' | 'date' | null>(null);
   const [catDropPos, setCatDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [accDropPos, setAccDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [calView, setCalView]     = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
 
   const categoryRef = useRef<HTMLDivElement>(null);
   const catMenuRef  = useRef<HTMLDivElement>(null);
   const accountRef  = useRef<HTMLDivElement>(null);
+  const accMenuRef  = useRef<HTMLDivElement>(null);
   const cardRef     = useRef<HTMLDivElement>(null);
   const dateRef     = useRef<HTMLDivElement>(null);
 
@@ -155,8 +157,9 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
       if (categoryRef.current && !categoryRef.current.contains(t) &&
           catMenuRef.current && !catMenuRef.current.contains(t))
         setOpenDropdown((p) => (p === 'category' ? null : p));
-      if (accountRef.current && !accountRef.current.contains(t))
-        setOpenDropdown((p) => (p === 'account' ? null : p));
+      if (accountRef.current && !accountRef.current.contains(t) &&
+          accMenuRef.current && !accMenuRef.current.contains(t))
+        setOpenDropdown((p) => { if (p === 'account') setAccDropPos(null); return p === 'account' ? null : p; });
       if (cardRef.current && !cardRef.current.contains(t))
         setOpenDropdown((p) => (p === 'card' ? null : p));
       if (dateRef.current && !dateRef.current.contains(t))
@@ -182,6 +185,9 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
     const installmentAmt = parseFloat((finalAmt / installCount).toFixed(2));
 
     const affectsAccount = paymentMethod === 'pix' || paymentType === 'debit';
+    const resolvedPaymentType = !form.bankId
+      ? 'pix'
+      : paymentType === 'credit' ? 'credit' : 'debit';
     const base = {
       type:        form.type,
       category:    form.category,
@@ -190,6 +196,7 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
       description: form.description || undefined,
       icon:        catDef.icon,
       color:       catDef.color,
+      paymentType: resolvedPaymentType,
     };
 
     if (editTransaction) {
@@ -331,7 +338,7 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
               {/* ── Fields ── */}
               <div
                 className="px-5 pt-3 pb-6 flex flex-col max-h-[70vh] overflow-y-auto styled-scrollbar"
-                onScroll={() => { setOpenDropdown(null); setCatDropPos(null); }}
+                onScroll={() => { setOpenDropdown(null); setCatDropPos(null); setAccDropPos(null); }}
               >
 
                 {/* Description */}
@@ -457,7 +464,14 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
                   <div ref={accountRef} className="relative">
                     <button
                       type="button"
-                      onClick={() => setOpenDropdown((p) => (p === 'account' ? null : 'account'))}
+                      onClick={() => {
+                        if (openDropdown === 'account') { setOpenDropdown(null); setAccDropPos(null); return; }
+                        if (accountRef.current) {
+                          const r = accountRef.current.getBoundingClientRect();
+                          setAccDropPos({ top: r.bottom + 4, left: r.left, width: r.width });
+                        }
+                        setOpenDropdown('account');
+                      }}
                       className="w-full flex items-center gap-3 py-2 px-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                     >
                       {selectedAccount ? (
@@ -473,42 +487,44 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
                       <ChevronDown size={15} className={`text-slate-400 transition-transform ${openDropdown === 'account' ? 'rotate-180' : ''}`} />
                     </button>
 
-                    <AnimatePresence>
-                      {openDropdown === 'account' && (
-                        <motion.div {...dropdownMotion}
-                          className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-[#222736] rounded-2xl shadow-xl border border-slate-100 dark:border-white/8 overflow-hidden py-1 max-h-64 overflow-y-auto styled-scrollbar"
+                    {openDropdown === 'account' && accDropPos && createPortal(
+                      <div
+                        ref={accMenuRef}
+                        style={{ position: 'fixed', top: accDropPos.top, left: accDropPos.left, width: accDropPos.width, zIndex: 9999 }}
+                        className="bg-white dark:bg-[#222736] rounded-2xl shadow-xl border border-slate-100 dark:border-white/8 overflow-hidden py-1 max-h-60 overflow-y-auto styled-scrollbar animate-in fade-in slide-in-from-top-1 duration-150"
+                      >
+                        <button type="button"
+                          onClick={() => { setAccountId(''); set('bankId', ''); setPaymentMethod('pix'); setPaymentType('debit'); setInstallments(1); setOpenDropdown(null); setAccDropPos(null); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-white/4 transition-colors"
                         >
-                          <button type="button"
-                            onClick={() => { setAccountId(''); set('bankId', ''); setPaymentMethod('pix'); setPaymentType('debit'); setInstallments(1); setOpenDropdown(null); }}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-white/4 transition-colors"
+                          <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0">
+                            <Building2 size={14} className="text-slate-400" />
+                          </div>
+                          <span className="text-sm text-slate-500 dark:text-slate-400">Não especificar</span>
+                          {!accountId && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />}
+                        </button>
+                        {accounts.map((acc) => (
+                          <button key={acc.id} type="button"
+                            onClick={() => {
+                              const hasCards = banks.some((b) => b.accountId === acc.id);
+                              setAccountId(acc.id);
+                              set('bankId', '');
+                              setPaymentMethod(hasCards ? 'card' : 'pix');
+                              setPaymentType('debit');
+                              setInstallments(1);
+                              setOpenDropdown(null);
+                              setAccDropPos(null);
+                            }}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${accountId === acc.id ? 'bg-slate-50 dark:bg-white/6' : 'hover:bg-slate-50 dark:hover:bg-white/4'}`}
                           >
-                            <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0">
-                              <Building2 size={14} className="text-slate-400" />
-                            </div>
-                            <span className="text-sm text-slate-500 dark:text-slate-400">Não especificar</span>
-                            {!accountId && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />}
+                            <AccountLogo account={acc} />
+                            <span className="flex-1 text-left text-sm text-slate-700 dark:text-slate-200">{acc.name}</span>
+                            {accountId === acc.id && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
                           </button>
-                          {accounts.map((acc) => (
-                            <button key={acc.id} type="button"
-                              onClick={() => {
-                                const hasCards = banks.some((b) => b.accountId === acc.id);
-                                setAccountId(acc.id);
-                                set('bankId', '');
-                                setPaymentMethod(hasCards ? 'card' : 'pix');
-                                setPaymentType('debit');
-                                setInstallments(1);
-                                setOpenDropdown(null);
-                              }}
-                              className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${accountId === acc.id ? 'bg-slate-50 dark:bg-white/6' : 'hover:bg-slate-50 dark:hover:bg-white/4'}`}
-                            >
-                              <AccountLogo account={acc} />
-                              <span className="flex-1 text-left text-sm text-slate-700 dark:text-slate-200">{acc.name}</span>
-                              {accountId === acc.id && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                        ))}
+                      </div>,
+                      document.body
+                    )}
                   </div>
                 </div>
 

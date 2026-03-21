@@ -292,6 +292,7 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                       const Icon = iconMap[tx.icon] ?? ShoppingCart;
                       const displayLabel = tx._baseLabel ?? tx.label;
                       const displayAmount = tx._instTotal ?? Math.abs(tx.amount);
+                      const isDebit = !!tx.accountId;
                       return (
                         <div key={tx.id}>
                           <div className="flex items-center gap-3 py-2.5">
@@ -310,7 +311,18 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[10px] text-slate-400">{formatDate(tx.date)}</p>
+                              <p className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                                {formatDate(tx.date)}
+                                {isDebit ? (
+                                  <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                                    Débito
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
+                                    Crédito
+                                  </span>
+                                )}
+                              </p>
                             </div>
                             <span className="text-xs font-bold text-slate-700 dark:text-slate-200 shrink-0">
                               {fmt(displayAmount)}

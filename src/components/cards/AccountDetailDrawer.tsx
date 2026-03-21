@@ -246,9 +246,11 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
                     {paginated.map((tx) => {
                       const Icon = iconMap[tx.icon] ?? ShoppingCart;
                       const isIncome = tx.type === 'income';
-                      const isAdjust = tx.label === 'Ajuste de saldo' || tx.label === 'Saldo inicial';
-                      const isCard = !!tx.bankId;
-                      const isPix  = !isAdjust && !isCard && !!tx.accountId;
+                      const isAdjust     = tx.label === 'Ajuste de saldo' || tx.label === 'Saldo inicial';
+                      const isCardDebit  = !!tx.bankId && !!tx.accountId;
+                      const isCardCredit = !!tx.bankId && !tx.accountId;
+                      const isCard       = isCardDebit || isCardCredit;
+                      const isPix        = !isAdjust && !isCard && !!tx.accountId;
                       const displayLabel = tx._baseLabel ?? tx.label;
                       const displayAmount = tx._instTotal ?? Math.abs(tx.amount);
                       return (
@@ -282,9 +284,14 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
                                   PIX
                                 </span>
                               )}
-                              {isCard && (
+                              {isCardDebit && (
                                 <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
-                                  Cartão
+                                  Débito
+                                </span>
+                              )}
+                              {isCardCredit && (
+                                <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
+                                  Crédito
                                 </span>
                               )}
                             </p>

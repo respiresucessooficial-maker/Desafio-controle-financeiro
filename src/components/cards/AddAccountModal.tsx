@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Building2, ChevronLeft, Search } from 'lucide-react';
+import { X, Check, Building2, ChevronLeft, Search, HelpCircle } from 'lucide-react';
 import { useAppData } from '@/contexts/AppDataContext';
 import { Account, AccountType } from '@/types';
 import { INSTITUTIONS, Institution } from '@/data/institutions';
@@ -33,11 +33,14 @@ function InstitutionLogo({ inst }: { inst: Institution }) {
   );
 }
 
+const OTHER_INST_ID = '__other__';
+
 const emptyForm = {
   type: 'corrente' as AccountType,
   balance: '',
   agency: '',
   accountNumber: '',
+  customName: '',
 };
 
 interface Props {
@@ -57,12 +60,14 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
     if (!isOpen) return;
     setSearch('');
     if (editAccount) {
-      setSelectedId(editAccount.institutionId ?? '');
+      const isCustom = !editAccount.institutionId;
+      setSelectedId(isCustom ? OTHER_INST_ID : editAccount.institutionId!);
       setForm({
         type: editAccount.type,
         balance: formatCurrencyInput(String(Math.round(editAccount.balance * 100))),
         agency: (editAccount.agency ?? '').slice(-2),
         accountNumber: (editAccount.accountNumber ?? '').slice(-3),
+        customName: isCustom ? editAccount.brand : '',
       });
     } else {
       setSelectedId('');
@@ -86,24 +91,28 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
 
   const typeLabel = ACCOUNT_TYPES.find((t) => t.value === form.type)?.label ?? 'Conta';
 
+  const isOther = selectedId === OTHER_INST_ID;
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!inst) return;
+    if (!isOther && !inst) return;
     const balance = parseCurrencyInput(form.balance);
     if (isNaN(balance)) return;
 
+    const bankName = isOther ? (form.customName.trim() || 'Outro banco') : inst!.name;
+
     const data = {
-      institutionId: inst.id,
-      name: `${inst.name} — ${typeLabel}`,
+      institutionId: isOther ? undefined : inst!.id,
+      name: `${bankName} — ${typeLabel}`,
       type: form.type,
       balance,
       agency: form.agency || undefined,
       accountNumber: form.accountNumber || undefined,
-      color: inst.color,
-      textColor: inst.textColor,
-      accentColor: inst.accentColor,
-      brand: inst.brand,
-      code: inst.code,
+      color: isOther ? '#6B7280' : inst!.color,
+      textColor: isOther ? '#FFFFFF' : inst!.textColor,
+      accentColor: isOther ? '#9CA3AF' : inst!.accentColor,
+      brand: isOther ? (form.customName.trim() || 'Outro') : inst!.brand,
+      code: isOther ? '000' : inst!.code,
     };
 
     const today = new Date().toISOString().slice(0, 10);
@@ -119,7 +128,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
           date: today,
           category: 'Outros',
           icon: 'BarChart2',
-          color: inst.accentColor,
+          color: data.accentColor,
           accountId: editAccount.id,
           description: `Ajuste de saldo: ${diff > 0 ? '+' : ''}${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(diff)}`,
         }, { skipBalanceUpdate: true });
@@ -134,7 +143,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
           date: today,
           category: 'Outros',
           icon: 'Home',
-          color: inst.accentColor,
+          color: data.accentColor,
           accountId: newAcc.id,
           description: 'Saldo inicial da conta',
         }, { skipBalanceUpdate: true });
@@ -183,7 +192,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
                   <Building2 size={18} className="text-amber-500" />
                 </div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">
-                  {isEditing ? 'Editar conta' : showForm ? (inst?.name ?? 'Nova conta') : 'Nova Conta'}
+                  {isEditing ? 'Editar conta' : showForm ? (isOther ? 'Outro banco' : (inst?.name ?? 'Nova conta')) : 'Nova Conta'}
                 </h2>
               </div>
               <motion.button
@@ -230,7 +239,7 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
                     </div>
 
                     {/* Logo grid */}
-                    <div className="grid grid-cols-5 gap-1 pb-8">
+                    <div className="grid grid-cols-5 gap-1 pb-2">
                       {filteredInstitutions.map((i) => (
                         <InstitutionTile
                           key={i.id}
@@ -245,6 +254,23 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
                           Nenhuma instituição encontrada.
                         </p>
                       )}
+                    </div>
+
+                    {/* Other bank button */}
+                    <div className="pb-8 pt-3 border-t border-slate-100 dark:border-white/8">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(OTHER_INST_ID)}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-dashed border-slate-300 dark:border-white/15 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:border-amber-400 hover:text-amber-500 transition-all text-sm font-medium"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0">
+                          <HelpCircle size={18} className="text-slate-400" />
+                        </div>
+                        <div className="text-left">
+                          <p className="font-semibold text-slate-700 dark:text-slate-200 text-sm">Meu banco não está na lista</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Cadastrar com outro banco ou instituição</p>
+                        </div>
+                      </button>
                     </div>
                   </motion.div>
                 )}
@@ -261,11 +287,27 @@ export default function AddAccountModal({ isOpen, onClose, editAccount }: Props)
                     className="px-6 pb-8 flex flex-col gap-5"
                   >
                     {/* Institution info pill */}
-                    {inst && (
+                    {inst && !isOther && (
                       <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/8">
                         <InstitutionLogo inst={inst} />
                         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{inst.name}</span>
                         <span className="ml-auto text-xs text-slate-400 font-mono shrink-0">COMPE {inst.code}</span>
+                      </div>
+                    )}
+
+                    {/* Custom bank name */}
+                    {isOther && (
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Nome do banco / instituição *</label>
+                        <input
+                          type="text"
+                          value={form.customName}
+                          onChange={(e) => set('customName', e.target.value)}
+                          placeholder="Ex: Banco do Brasil, Caixa..."
+                          required
+                          autoFocus
+                          className={inputCls}
+                        />
                       </div>
                     )}
 

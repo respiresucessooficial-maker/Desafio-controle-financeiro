@@ -19,6 +19,7 @@ export function getCardCurrentInvoiceFromTransactions(
 ) {
   return transactions.reduce((sum, tx) => {
     if (tx.bankId !== bankId || tx.type !== 'expense') return sum;
+    if (tx.accountId) return sum; // débito: não entra na fatura
     const txDate = new Date(tx.date + 'T00:00:00');
     if (
       txDate.getFullYear() !== baseDate.getFullYear() ||

@@ -16,7 +16,7 @@ const steps = [
   {
     n: '01',
     title: 'Crie sua conta',
-    desc: 'Cadastro simples, sem burocracia. Nenhum dado bancário solicitado.',
+    desc: 'Cadastro simples, sem burocracia.',
   },
   {
     n: '02',
@@ -355,11 +355,10 @@ export default function LandingPage() {
                 whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                 className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-base cursor-pointer transition-colors shadow-lg shadow-amber-500/20"
               >
-                Criar conta grátis
+                Quero começar agora
                 <ArrowRight size={18} />
               </motion.span>
             </Link>
-            <p className="text-xs text-slate-400">Sem cartão de crédito · Sempre gratuito</p>
           </div>
         </motion.div>
       </section>

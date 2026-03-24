@@ -160,50 +160,49 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
 
   return (
     <AnimatePresence>
-      {bank && (
-        <>
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
-          />
+      <>
+        <motion.div
+          key="backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
+        />
 
-          <motion.aside
-            key="drawer"
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="fixed right-0 top-0 h-full w-full max-w-[420px] bg-white dark:bg-card z-50 flex flex-col shadow-2xl overflow-y-auto styled-scrollbar"
-          >
-            <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Detalhes</p>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">{bank.name}</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <motion.button
-                  onClick={() => setEditOpen(true)}
-                  whileHover={{ scale: 1.08 }}
-                  whileTap={{ scale: 0.92 }}
-                  title="Editar cartao"
-                  className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
-                >
-                  <Pencil size={16} />
-                </motion.button>
-                <motion.button
-                  onClick={onClose}
-                  whileHover={{ scale: 1.08 }}
-                  whileTap={{ scale: 0.92 }}
-                  className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors"
-                >
-                  <X size={18} />
-                </motion.button>
-              </div>
+        <motion.aside
+          key="drawer"
+          initial={{ x: '100%' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100%' }}
+          transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+          className="fixed right-0 top-0 h-full w-full max-w-[420px] bg-white dark:bg-card z-50 flex flex-col shadow-2xl overflow-y-auto styled-scrollbar"
+        >
+          <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Detalhes</p>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">{bank.name}</h2>
             </div>
+            <div className="flex items-center gap-2">
+              <motion.button
+                onClick={() => setEditOpen(true)}
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                title="Editar cartao"
+                className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
+              >
+                <Pencil size={16} />
+              </motion.button>
+              <motion.button
+                onClick={onClose}
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors"
+              >
+                <X size={18} />
+              </motion.button>
+            </div>
+          </div>
 
             <div className="flex justify-center px-6 pb-6">
               <BankCard bank={bank} />
@@ -428,9 +427,8 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                 )}
               </div>
             </div>
-          </motion.aside>
-        </>
-      )}
+        </motion.aside>
+      </>
 
       <AddCardModal
         isOpen={editOpen}

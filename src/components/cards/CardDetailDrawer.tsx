@@ -93,14 +93,15 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
   const [payConfirmOpen, setPayConfirmOpen] = useState(false);
 
   if (!bank) return null;
+  const currentBank = bank;
 
-  const linkedAccount = accounts.find((account) => account.id === bank.accountId);
+  const linkedAccount = accounts.find((account) => account.id === currentBank.accountId);
 
   const cardExpenseTransactions = transactions.filter(
     (transaction) =>
-      transaction.bankId === bank.id &&
+      transaction.bankId === currentBank.id &&
       transaction.type === 'expense' &&
-      !isInvoicePaymentTransaction(transaction, bank.id),
+      !isInvoicePaymentTransaction(transaction, currentBank.id),
   );
 
   const cardTransactions = groupInstallments(cardExpenseTransactions).slice(0, 5);
@@ -131,10 +132,10 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
     {},
   );
 
-  const creditLimit = bank.creditLimit ?? 0;
-  const creditUsed = getCardInvoiceAmount(bank);
-  const canPayInvoice = (bank.invoiceStatus === 'open' || bank.invoiceStatus === 'overdue') && creditUsed > 0 && !!linkedAccount;
-  const creditAvailableConfigured = getCardConfiguredAvailableLimit(bank);
+  const creditLimit = currentBank.creditLimit ?? 0;
+  const creditUsed = getCardInvoiceAmount(currentBank);
+  const canPayInvoice = (currentBank.invoiceStatus === 'open' || currentBank.invoiceStatus === 'overdue') && creditUsed > 0 && !!linkedAccount;
+  const creditAvailableConfigured = getCardConfiguredAvailableLimit(currentBank);
   const creditAvailable = Math.max(0, creditAvailableConfigured - creditUsed);
   const usagePct = creditLimit > 0 ? Math.min(100, (creditUsed / creditLimit) * 100) : 0;
 
@@ -147,7 +148,7 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
     overdue: { label: 'Atrasada', icon: AlertCircle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-500/10' },
   };
 
-  const status = statusConfig[bank.invoiceStatus ?? 'open'];
+  const status = statusConfig[currentBank.invoiceStatus ?? 'open'];
   const StatusIcon = status.icon;
 
   const paidInvoices = Object.values(
@@ -164,8 +165,8 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
   ).sort((a, b) => b.sortKey.localeCompare(a.sortKey));
 
   const invoiceHistory: InvoiceHistoryItem[] = [
-    ...(creditUsed > 0 || bank.invoiceStatus !== 'paid'
-      ? [{ month: monthLabel(currentMonthDate), amount: creditUsed, status: bank.invoiceStatus ?? 'open', sortKey: currentMonthKey }]
+    ...(creditUsed > 0 || currentBank.invoiceStatus !== 'paid'
+      ? [{ month: monthLabel(currentMonthDate), amount: creditUsed, status: currentBank.invoiceStatus ?? 'open', sortKey: currentMonthKey }]
       : []),
     ...paidInvoices,
   ];
@@ -180,14 +181,14 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
       category: 'Outros',
       type: 'expense',
       icon: 'Wallet',
-      color: bank.accentColor,
+      color: currentBank.accentColor,
       accountId: linkedAccount.id,
-      bankId: bank.id,
+      bankId: currentBank.id,
       paymentType: 'pix',
       description: `invoice_payment:${currentMonthKey}`,
     });
 
-    updateBank(bank.id, {
+    updateBank(currentBank.id, {
       creditUsed: 0,
       lastInvoiceAmount: 0,
       invoiceStatus: 'paid',
@@ -198,8 +199,7 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
 
   return (
     <AnimatePresence>
-      {bank && (
-        <>
+      <>
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
@@ -220,7 +220,7 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
           <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Detalhes</p>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">{bank.name}</h2>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">{currentBank.name}</h2>
             </div>
             <div className="flex items-center gap-2">
               <motion.button
@@ -241,10 +241,10 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                 <X size={18} />
               </motion.button>
             </div>
-          </div>
+            </div>
 
             <div className="flex justify-center px-6 pb-6">
-              <BankCard bank={bank} />
+              <BankCard bank={currentBank} />
             </div>
 
             <div className="flex flex-col gap-4 px-6 pb-8">
@@ -301,19 +301,19 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                     <Calendar size={15} className="text-slate-400 flex-shrink-0" />
                     <div>
                       <p className="text-[10px] text-slate-400">Fechamento</p>
-                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{bank.closingDay ? `Dia ${bank.closingDay}` : '-'}</p>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{currentBank.closingDay ? `Dia ${currentBank.closingDay}` : '-'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5 p-3 bg-white dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/8">
                     <TrendingDown size={15} className="text-slate-400 flex-shrink-0" />
                     <div>
                       <p className="text-[10px] text-slate-400">Vencimento</p>
-                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{bank.dueDay ? `Dia ${bank.dueDay}` : '-'}</p>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{currentBank.dueDay ? `Dia ${currentBank.dueDay}` : '-'}</p>
                     </div>
                   </div>
                 </div>
 
-                {(bank.invoiceStatus === 'open' || bank.invoiceStatus === 'overdue') && (
+                {(currentBank.invoiceStatus === 'open' || currentBank.invoiceStatus === 'overdue') && (
                   <div className="mt-4">
                     {payConfirmOpen ? (
                       <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
@@ -510,14 +510,13 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
               </div>
             </div>
           </motion.aside>
-        </>
-      )}
+      </>
 
       <AddCardModal
-        key={bank ? `edit-card-${bank.id}` : 'edit-card-empty'}
+        key={`edit-card-${currentBank.id}`}
         isOpen={editOpen}
         onClose={() => setEditOpen(false)}
-        editBank={bank}
+        editBank={currentBank}
       />
     </AnimatePresence>
   );

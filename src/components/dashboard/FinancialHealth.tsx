@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import { useAppData } from '@/contexts/AppDataContext';
+import { getMonthlyAccountFlowTotals } from '@/lib/dashboardMetrics';
+import { dashboardTitleClass } from '@/components/dashboard/dashboardTypography';
 
 const R = 52;
 const CIRCUMFERENCE = 2 * Math.PI * R;
@@ -23,21 +25,13 @@ function scoreColor(score: number) {
 }
 
 export default function FinancialHealth({ showTitle = true }: FinancialHealthProps) {
-  const { transactions } = useAppData();
+  const { transactions, accounts } = useAppData();
   const [progress, setProgress] = useState(0);
-
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-  const monthlyTransactions = transactions.filter((t) => t.date.startsWith(currentMonth));
-
-  const monthlyIncome = monthlyTransactions
-    .filter((t) => t.type === 'income')
-    .reduce((s, t) => s + t.amount, 0);
-
-  const monthlyExpenses = monthlyTransactions
-    .filter((t) => t.type === 'expense')
-    .reduce((s, t) => s + Math.abs(t.amount), 0);
+  const monthlyFlows = getMonthlyAccountFlowTotals(accounts, transactions, currentMonth);
+  const monthlyIncome = monthlyFlows.income;
+  const monthlyExpenses = monthlyFlows.expenses;
 
   const savingsRate = monthlyIncome > 0
     ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100
@@ -62,7 +56,7 @@ export default function FinancialHealth({ showTitle = true }: FinancialHealthPro
   return (
     <div className="w-full rounded-2xl border border-slate-100 bg-white p-5 dark:bg-card dark:border-white/8 flex flex-col">
       {showTitle && (
-        <h2 className="mb-4 text-sm font-bold text-slate-900 dark:text-slate-50">Saude Financeira</h2>
+        <h2 className={`mb-4 ${dashboardTitleClass}`}>Saude Financeira</h2>
       )}
 
       <div className="flex flex-1 items-center gap-5">

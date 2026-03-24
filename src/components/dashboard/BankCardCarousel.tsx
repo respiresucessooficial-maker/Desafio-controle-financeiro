@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, CreditCard, Plus } from 'lucide-react';
 import BankCard from '@/components/cards/BankCard';
 import CardDetailDrawer from '@/components/cards/CardDetailDrawer';
 import { useAppData } from '@/contexts/AppDataContext';
-import { Bank } from '@/types';
+import { dashboardTitleClass } from '@/components/dashboard/dashboardTypography';
 
 interface BankCardCarouselProps {
   showTitle?: boolean;
@@ -14,17 +14,21 @@ interface BankCardCarouselProps {
 
 export default function BankCardCarousel({ showTitle = true }: BankCardCarouselProps) {
   const { banks, transactions } = useAppData();
-  const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
+  const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
 
   const topCards = [...banks]
     .sort((a, b) => (b.creditUsed ?? 0) - (a.creditUsed ?? 0))
     .slice(0, 5);
+  const selectedBank = useMemo(
+    () => (selectedBankId ? banks.find((bank) => bank.id === selectedBankId) ?? null : null),
+    [banks, selectedBankId],
+  );
 
   return (
     <>
       <div className="relative">
         {showTitle && (
-          <h2 className="mb-4 text-sm font-bold text-slate-900 dark:text-slate-50">Meus Cartoes</h2>
+          <h2 className={`mb-4 ${dashboardTitleClass}`}>Meus Cartoes</h2>
         )}
 
         {topCards.length === 0 ? (
@@ -51,13 +55,13 @@ export default function BankCardCarousel({ showTitle = true }: BankCardCarouselP
             </div>
           </div>
         ) : (
-          <div className="-my-4">
-            <div className="flex gap-4 overflow-x-auto no-scrollbar px-1 py-4 pr-6">
-              {topCards.map((bank) => (
-                <div key={bank.id} className="flex-shrink-0">
-                  <BankCard bank={bank} onClick={() => setSelectedBank(bank)} />
-                </div>
-              ))}
+            <div className="-my-4">
+              <div className="flex gap-4 overflow-x-auto no-scrollbar px-1 py-4 pr-6">
+                {topCards.map((bank) => (
+                  <div key={bank.id} className="flex-shrink-0">
+                    <BankCard bank={bank} onClick={() => setSelectedBankId(bank.id)} />
+                  </div>
+                ))}
 
               <Link href="/cards" className="flex-shrink-0 self-center" title="Ver todos os cartoes">
                 <div className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-2xl bg-amber-500 shadow-lg transition-colors hover:bg-amber-600">
@@ -72,7 +76,7 @@ export default function BankCardCarousel({ showTitle = true }: BankCardCarouselP
       <CardDetailDrawer
         bank={selectedBank}
         transactions={transactions}
-        onClose={() => setSelectedBank(null)}
+        onClose={() => setSelectedBankId(null)}
       />
     </>
   );

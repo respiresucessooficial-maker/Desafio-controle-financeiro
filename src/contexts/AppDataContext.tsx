@@ -11,6 +11,7 @@ import {
 import { Transaction, Budget, Bank, Goal, Account, GoalContribution } from '@/types';
 import { getCategoryDef, CATEGORIES, CategoryDef } from '@/data/categories';
 import { INSTITUTIONS } from '@/data/institutions';
+import { isInvoicePaymentTransaction } from '@/lib/cardLimits';
 import { supabase } from '@/lib/supabase';
 
 // ── Hydration helpers ─────────────────────────────────────────────────────────
@@ -193,7 +194,8 @@ function isSameYearMonth(dateStr: string, baseDate: Date) {
 function getCurrentInvoiceAmount(transactions: Transaction[], bankId: string, baseDate = new Date()) {
   return transactions.reduce((sum, tx) => {
     if (tx.bankId !== bankId || tx.type !== 'expense') return sum;
-    if (tx.accountId) return sum; // débito: já descontou do saldo da conta, não afeta fatura
+    if (isInvoicePaymentTransaction(tx, bankId)) return sum - Math.abs(tx.amount);
+    if (tx.accountId) return sum;
     if (!isSameYearMonth(tx.date, baseDate)) return sum;
     return sum + Math.abs(tx.amount);
   }, 0);
@@ -726,3 +728,4 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 }
 
 export const useAppData = () => useContext(AppDataContext);
+

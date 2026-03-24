@@ -9,23 +9,26 @@ import AccountDetailDrawer from '@/components/cards/AccountDetailDrawer';
 import AddCardModal from '@/components/cards/AddCardModal';
 import AddAccountModal from '@/components/cards/AddAccountModal';
 import { useAppData } from '@/contexts/AppDataContext';
-import { Account, Bank } from '@/types';
+import { Account } from '@/types';
 import { useFabAction } from '@/contexts/FabContext';
 import { INSTITUTIONS } from '@/data/institutions';
 import { getInstitutionLogoSources } from '@/utils/logoSources';
 import { ACCOUNT_TYPE_LABELS } from '@/data/accountTypes';
 import { getCardRemainingAvailableLimit } from '@/lib/cardLimits';
+import { getEffectiveAccountBalances, getEffectiveTotalAccountBalance } from '@/lib/dashboardMetrics';
 
 const tileFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 function AccountTile({
   account,
+  balance,
   selected,
   onClick,
   onEdit,
   onHistory,
 }: {
   account: Account;
+  balance: number;
   selected: boolean;
   onClick: () => void;
   onEdit: () => void;
@@ -93,7 +96,7 @@ function AccountTile({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">{account.name}</p>
         <p className="mt-0.5 text-base font-bold text-slate-900 dark:text-slate-50">
-          {tileFmt.format(account.balance)}
+          {tileFmt.format(balance)}
         </p>
         <div className="mt-1 flex flex-col gap-0.5">
           <span className="self-start rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-slate-400">
@@ -192,10 +195,14 @@ export default function CardsPage() {
   const detailBank = detailBankId ? banks.find((b) => b.id === detailBankId) ?? null : null;
 
   const fmt = (v: number) => tileFmt.format(v);
+  const effectiveBalances = useMemo(
+    () => getEffectiveAccountBalances(accounts, transactions),
+    [accounts, transactions],
+  );
 
   const totalBalance = useMemo(
-    () => accounts.reduce((s, a) => s + a.balance, 0),
-    [accounts],
+    () => getEffectiveTotalAccountBalance(accounts, transactions),
+    [accounts, transactions],
   );
   const totalCreditAvail = useMemo(
     () => banks.reduce((s, b) => s + getCardRemainingAvailableLimit(b), 0),
@@ -287,6 +294,7 @@ export default function CardsPage() {
                 <AccountTile
                   key={account.id}
                   account={account}
+                  balance={effectiveBalances.get(account.id) ?? account.balance}
                   selected={selectedAccountId === account.id}
                   onClick={() => setSelectedAccountId((prev) => (prev === account.id ? null : account.id))}
                   onEdit={() => {
@@ -392,6 +400,7 @@ export default function CardsPage() {
       />
       <AccountDetailDrawer
         account={detailAccount}
+        accounts={accounts}
         banks={banks}
         transactions={transactions}
         onClose={() => setDetailAccount(null)}

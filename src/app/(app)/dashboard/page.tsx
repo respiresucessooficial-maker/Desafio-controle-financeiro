@@ -12,6 +12,8 @@ import BalanceHeader from '@/components/dashboard/BalanceHeader';
 import BankCardCarousel from '@/components/dashboard/BankCardCarousel';
 import RecentTransactions from '@/components/dashboard/RecentTransactions';
 import FinancialHealth from '@/components/dashboard/FinancialHealth';
+import MonthlySummary from '@/components/dashboard/MonthlySummary';
+import { dashboardEyebrowClass, dashboardTitleClass } from '@/components/dashboard/dashboardTypography';
 import { useAuth } from '@/contexts/AuthContext';
 
 function renderWidgetContent(isEditMode: boolean): Record<string, React.ReactNode> {
@@ -20,6 +22,7 @@ function renderWidgetContent(isEditMode: boolean): Record<string, React.ReactNod
     cards: <BankCardCarousel showTitle={!isEditMode} />,
     transactions: <RecentTransactions showTitle={!isEditMode} />,
     health: <FinancialHealth showTitle={!isEditMode} />,
+    summary: <MonthlySummary showTitle={!isEditMode} />,
   };
 }
 
@@ -66,10 +69,10 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
             >
-              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
+              <p className={`mb-1 ${dashboardEyebrowClass}`}>
                 {capitalizedDate}
               </p>
-              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50 leading-tight">
+              <h1 className={`${dashboardTitleClass} text-[2rem] leading-tight`}>
                 {getGreeting()}{firstName ? `, ${firstName}` : ''}
               </h1>
               <p className="text-sm text-slate-400 dark:text-slate-500 mt-1.5">

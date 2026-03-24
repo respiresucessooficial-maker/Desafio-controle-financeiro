@@ -25,6 +25,7 @@ import { useAppData } from '@/contexts/AppDataContext';
 import { Transaction } from '@/types';
 import TransactionDetailModal from '@/components/transactions/TransactionDetailModal';
 import TransactionFormModal from '@/components/transactions/TransactionFormModal';
+import { dashboardTitleClass } from '@/components/dashboard/dashboardTypography';
 
 interface RecentTransactionsProps {
   showTitle?: boolean;
@@ -92,7 +93,7 @@ export default function RecentTransactions({ showTitle = true }: RecentTransacti
       <div className="h-full rounded-2xl border border-slate-100 bg-white p-6 dark:bg-card dark:border-white/8">
         <div className="mb-5 flex items-center justify-between">
           {showTitle ? (
-            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-50">Transacoes Recentes</h2>
+            <h2 className={dashboardTitleClass}>Transacoes Recentes</h2>
           ) : (
             <div />
           )}

@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   TrendingUp,
-  TrendingDown,
   ArrowUpRight,
   ArrowDownRight,
   ShoppingCart,
@@ -29,6 +28,7 @@ import { Account, Bank, Transaction } from '@/types';
 import { getInstitutionLogoSources } from '@/utils/logoSources';
 import { INSTITUTIONS } from '@/data/institutions';
 import AddAccountModal from './AddAccountModal';
+import { getAccountScopedTransactions, getEffectiveAccountBalances } from '@/lib/dashboardMetrics';
 
 const iconMap: Record<string, React.ElementType> = {
   ShoppingCart, TrendingUp, Car, Tv, UtensilsCrossed, Briefcase,
@@ -45,6 +45,7 @@ function formatDate(dateStr: string) {
 
 interface Props {
   account: Account | null;
+  accounts: Account[];
   banks: Bank[];
   transactions: Transaction[];
   onClose: () => void;
@@ -101,18 +102,14 @@ function groupInstallments(txs: Transaction[]): DisplayTx[] {
   return result;
 }
 
-export default function AccountDetailDrawer({ account, banks, transactions, onClose }: Props) {
+export default function AccountDetailDrawer({ account, accounts, banks, transactions, onClose }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [page, setPage] = useState(1);
 
   if (!account) return null;
 
-  // All transactions for this account:
-  // 1. Direct account transactions (initial balance, adjustments)
-  // 2. Card transactions from cards linked to this account
-  const accountCardIds = new Set(banks.filter((b) => b.accountId === account.id).map((b) => b.id));
-  const accountTransactions = transactions
-    .filter((t) => t.accountId === account.id || (t.bankId && accountCardIds.has(t.bankId)))
+  const effectiveBalance = getEffectiveAccountBalances(accounts, transactions).get(account.id) ?? account.balance;
+  const accountTransactions = getAccountScopedTransactions(account, accounts, banks, transactions)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const grouped = groupInstallments(accountTransactions);
@@ -178,7 +175,7 @@ export default function AccountDetailDrawer({ account, banks, transactions, onCl
               <div className="min-w-0 flex-1">
                 <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50 truncate">{account.name}</h2>
                 <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mt-1">
-                  {fmt(account.balance)}
+                  {fmt(effectiveBalance)}
                 </p>
                 <div className="mt-1.5 flex items-center gap-1.5">
                   {account.agency && (

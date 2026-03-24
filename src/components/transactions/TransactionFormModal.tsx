@@ -140,8 +140,9 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
         setPaymentType('debit');
         setInstallments(1);
       } else {
+        const defaultAccountId = accounts.length === 1 ? accounts[0].id : '';
         setForm({ ...emptyForm, date: new Date().toISOString().slice(0, 10) });
-        setAccountId('');
+        setAccountId(defaultAccountId);
         setPaymentMethod('pix');
         setPaymentType('debit');
         setInstallments(1);
@@ -149,7 +150,7 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
     } else {
       setOpenDropdown(null);
     }
-  }, [isOpen, editTransaction, banks]);
+  }, [isOpen, editTransaction, banks, accounts]);
 
   useEffect(() => {
     function handleOutside(e: MouseEvent) {
@@ -184,6 +185,7 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
     const installCount   = paymentType === 'credit' && form.bankId ? installments : 1;
     const installmentAmt = parseFloat((finalAmt / installCount).toFixed(2));
 
+    const resolvedAccountId = accountId || (accounts.length === 1 ? accounts[0].id : '');
     const affectsAccount = paymentMethod === 'pix' || paymentType === 'debit';
     const resolvedPaymentType: 'pix' | 'debit' | 'credit' = !form.bankId
       ? 'pix'
@@ -192,7 +194,7 @@ export default function TransactionFormModal({ isOpen, onClose, editTransaction 
       type:        form.type,
       category:    form.category,
       bankId:      form.bankId || undefined,
-      accountId:   affectsAccount && accountId ? accountId : undefined,
+      accountId:   affectsAccount && resolvedAccountId ? resolvedAccountId : undefined,
       description: form.description || undefined,
       icon:        catDef.icon,
       color:       catDef.color,

@@ -33,9 +33,11 @@ import { Bank, Transaction } from '@/types';
 import {
   getCardConfiguredAvailableLimit,
   getCardInvoiceAmount,
+  isInvoicePaymentTransaction,
 } from '@/lib/cardLimits';
 import BankCard from './BankCard';
 import AddCardModal from './AddCardModal';
+import { useAppData } from '@/contexts/AppDataContext';
 
 const iconMap: Record<string, React.ElementType> = {
   ShoppingCart, TrendingUp, Car, Tv, UtensilsCrossed, Briefcase,
@@ -85,12 +87,21 @@ interface Props {
 }
 
 export default function CardDetailDrawer({ bank, transactions, onClose }: Props) {
+  const { addTransaction, updateBank, accounts } = useAppData();
   const [editOpen, setEditOpen] = useState(false);
   const [futureOpen, setFutureOpen] = useState(false);
+  const [payConfirmOpen, setPayConfirmOpen] = useState(false);
 
   if (!bank) return null;
 
-  const cardExpenseTransactions = transactions.filter((t) => t.bankId === bank.id && t.type === 'expense');
+  const linkedAccount = accounts.find((account) => account.id === bank.accountId);
+
+  const cardExpenseTransactions = transactions.filter(
+    (transaction) =>
+      transaction.bankId === bank.id &&
+      transaction.type === 'expense' &&
+      !isInvoicePaymentTransaction(transaction, bank.id),
+  );
 
   const cardTransactions = groupInstallments(cardExpenseTransactions).slice(0, 5);
 
@@ -122,6 +133,7 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
 
   const creditLimit = bank.creditLimit ?? 0;
   const creditUsed = getCardInvoiceAmount(bank);
+  const canPayInvoice = (bank.invoiceStatus === 'open' || bank.invoiceStatus === 'overdue') && creditUsed > 0 && !!linkedAccount;
   const creditAvailableConfigured = getCardConfiguredAvailableLimit(bank);
   const creditAvailable = Math.max(0, creditAvailableConfigured - creditUsed);
   const usagePct = creditLimit > 0 ? Math.min(100, (creditUsed / creditLimit) * 100) : 0;
@@ -158,17 +170,44 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
     ...paidInvoices,
   ];
 
+  function handlePayInvoice() {
+    if (!linkedAccount || creditUsed <= 0) return;
+
+    addTransaction({
+      label: `Pagamento da fatura ${monthLabel(currentMonthDate)}`,
+      amount: -Math.abs(creditUsed),
+      date: new Date().toISOString().slice(0, 10),
+      category: 'Outros',
+      type: 'expense',
+      icon: 'Wallet',
+      color: bank.accentColor,
+      accountId: linkedAccount.id,
+      bankId: bank.id,
+      paymentType: 'pix',
+      description: `invoice_payment:${currentMonthKey}`,
+    });
+
+    updateBank(bank.id, {
+      creditUsed: 0,
+      lastInvoiceAmount: 0,
+      invoiceStatus: 'paid',
+    });
+
+    setPayConfirmOpen(false);
+  }
+
   return (
     <AnimatePresence>
-      <>
-        <motion.div
-          key="backdrop"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
-        />
+      {bank && (
+        <>
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
+          />
 
         <motion.aside
           key="drawer"
@@ -273,6 +312,49 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                     </div>
                   </div>
                 </div>
+
+                {(bank.invoiceStatus === 'open' || bank.invoiceStatus === 'overdue') && (
+                  <div className="mt-4">
+                    {payConfirmOpen ? (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          Confirmar pagamento da fatura?
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {linkedAccount
+                            ? `Vamos descontar ${fmt(creditUsed)} da conta ${linkedAccount.name}, zerar a fatura atual e registrar a despesa no orcamento.`
+                            : 'Vincule este cartao a uma conta para pagar a fatura.'}
+                        </p>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPayConfirmOpen(false)}
+                            className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-white dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handlePayInvoice}
+                            disabled={!canPayInvoice}
+                            className="flex-1 rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Pagar fatura
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setPayConfirmOpen(true)}
+                        disabled={!canPayInvoice}
+                        className="w-full rounded-xl bg-amber-500 px-3 py-2.5 text-sm font-bold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {linkedAccount ? 'Pagar fatura' : 'Vincule uma conta para pagar'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-4">
@@ -427,10 +509,12 @@ export default function CardDetailDrawer({ bank, transactions, onClose }: Props)
                 )}
               </div>
             </div>
-        </motion.aside>
-      </>
+          </motion.aside>
+        </>
+      )}
 
       <AddCardModal
+        key={bank ? `edit-card-${bank.id}` : 'edit-card-empty'}
         isOpen={editOpen}
         onClose={() => setEditOpen(false)}
         editBank={bank}

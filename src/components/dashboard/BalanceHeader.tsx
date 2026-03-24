@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDownRight, ArrowUpRight, Eye, EyeOff } from 'lucide-react';
 import { useAppData } from '@/contexts/AppDataContext';
+import { getAccountLifetimeFlowTotals, getEffectiveTotalAccountBalance } from '@/lib/dashboardMetrics';
+import { dashboardEyebrowClass } from '@/components/dashboard/dashboardTypography';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -58,17 +60,13 @@ export default function BalanceHeader() {
   const { transactions, accounts, budgets } = useAppData();
   const [hidden, setHidden] = useState(false);
 
-  const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
+  const totalBalance = getEffectiveTotalAccountBalance(accounts, transactions);
   const currentMonth = new Date().toISOString().slice(0, 7);
   const budgetCategories = new Set(budgets.map((budget) => budget.category));
+  const lifetimeFlows = getAccountLifetimeFlowTotals(accounts, transactions);
 
-  const monthIncome = transactions
-    .filter((t) => t.type === 'income' && t.date.startsWith(currentMonth))
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const monthExpenses = transactions
-    .filter((t) => t.type === 'expense' && t.date.startsWith(currentMonth))
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const totalIncome = lifetimeFlows.income;
+  const totalExpenses = lifetimeFlows.expenses;
 
   const budgetTrackedExpenses = transactions
     .filter(
@@ -90,7 +88,7 @@ export default function BalanceHeader() {
       <div className="flex items-start justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+            <p className={dashboardEyebrowClass}>
               Saldo Total
             </p>
             <button
@@ -121,7 +119,7 @@ export default function BalanceHeader() {
                 transition={{ duration: 0.2 }}
                 className="text-sm font-bold text-green-600 dark:text-green-400"
               >
-                {hidden ? maskedAmount : fmt(monthIncome)}
+                {hidden ? maskedAmount : fmt(totalIncome)}
               </motion.p>
             </AnimatePresence>
           </div>
@@ -142,7 +140,7 @@ export default function BalanceHeader() {
                 transition={{ duration: 0.2 }}
                 className="text-sm font-bold text-red-500 dark:text-red-400"
               >
-                {hidden ? maskedAmount : fmt(monthExpenses)}
+                {hidden ? maskedAmount : fmt(totalExpenses)}
               </motion.p>
             </AnimatePresence>
           </div>

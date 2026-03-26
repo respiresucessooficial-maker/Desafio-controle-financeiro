@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const next = searchParams.get('next') ?? (type === 'recovery' ? '/redefinir-senha' : '/dashboard');
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     },
   );
 
-  if (tokenHash && (type === 'signup' || type === 'email')) {
+  if (tokenHash && (type === 'signup' || type === 'email' || type === 'recovery')) {
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);

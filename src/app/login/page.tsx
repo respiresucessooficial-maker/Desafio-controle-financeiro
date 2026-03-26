@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, ArrowLeft, CreditCard } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, ArrowLeft, CreditCard, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { USER_ACCESS_STATUS } from '@/lib/access-status';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,12 +37,21 @@ function LoginPageInner() {
   const [showPass, setShowPass] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [validatingLogin, setValidatingLogin] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordSubmitting, setForgotPasswordSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
     if (!loading && user && !validatingLogin) router.replace('/dashboard');
   }, [user, loading, router, validatingLogin]);
+
+  useEffect(() => {
+    if (searchParams.get('error') === 'auth') {
+      setError('O link de acesso e invalido ou expirou. Solicite uma nova recuperacao de senha.');
+    }
+  }, [searchParams]);
 
   function resetState() {
     setError('');
@@ -139,12 +148,42 @@ function LoginPageInner() {
     }
   }
 
+  async function handleForgotPasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setForgotPasswordSubmitting(true);
+
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Nao foi possivel iniciar a recuperacao de senha.');
+      }
+
+      setForgotPasswordOpen(false);
+      setForgotPasswordEmail('');
+      setSuccess(data.message ?? 'Enviamos o link de recuperacao para o e-mail informado.');
+    } catch (err: unknown) {
+      setError(translateError(err instanceof Error ? err.message : 'Ocorreu um erro.'));
+    } finally {
+      setForgotPasswordSubmitting(false);
+    }
+  }
+
   function translateError(msg: string): string {
     if (msg.includes('Invalid login credentials')) return 'E-mail ou senha incorretos.';
     if (msg.includes('Email not confirmed')) return 'Nao foi possivel concluir o login. Tente novamente.';
     if (msg.includes('User already registered')) return 'Este e-mail ja esta cadastrado.';
     if (msg.includes('Este e-mail ja esta cadastrado')) return 'Este e-mail ja esta cadastrado.';
     if (msg.includes('Password should be')) return 'A senha deve ter pelo menos 6 caracteres.';
+    if (msg.includes('Nenhuma conta encontrada')) return 'Nenhuma conta encontrada com esse e-mail.';
     if (msg.includes('Entre em contato com o suporte')) return msg;
     return msg;
   }
@@ -318,6 +357,23 @@ function LoginPageInner() {
                 </button>
               </div>
 
+              {mode === 'login' && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotPasswordEmail(email);
+                      setForgotPasswordOpen(true);
+                      setError('');
+                      setSuccess('');
+                    }}
+                    className="text-sm font-medium text-amber-500 hover:text-amber-600 transition-colors"
+                  >
+                    Esqueci minha senha
+                  </button>
+                </div>
+              )}
+
               <AnimatePresence>
                 {error && (
                   <motion.p
@@ -367,6 +423,85 @@ function LoginPageInner() {
           Ao continuar, voce concorda com nossos termos de uso e politica de privacidade.
         </p>
       </div>
+
+      <AnimatePresence>
+        {forgotPasswordOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#17171c] p-6 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-50">
+                    Recuperar senha
+                  </h2>
+                  <p className="text-sm text-slate-400 mt-1">
+                    Informe o e-mail da conta para enviarmos o link de recuperacao.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => !forgotPasswordSubmitting && setForgotPasswordOpen(false)}
+                  className="rounded-full p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                  aria-label="Fechar modal"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleForgotPasswordSubmit} className="flex flex-col gap-4">
+                <div className="relative">
+                  <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="email"
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    placeholder="Digite seu e-mail"
+                    required
+                    autoFocus
+                    className={inputCls}
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForgotPasswordOpen(false)}
+                    className="flex-1 rounded-2xl border border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-white/20 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <motion.button
+                    type="submit"
+                    disabled={forgotPasswordSubmitting}
+                    whileHover={!forgotPasswordSubmitting ? { scale: 1.02 } : {}}
+                    whileTap={!forgotPasswordSubmitting ? { scale: 0.98 } : {}}
+                    className="flex-1 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-amber-500/20 hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+                  >
+                    {forgotPasswordSubmitting ? (
+                      <span className="flex items-center justify-center">
+                        <Loader2 size={16} className="animate-spin" />
+                      </span>
+                    ) : (
+                      'Enviar'
+                    )}
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

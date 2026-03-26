@@ -1,8 +1,9 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import type { User, Session } from '@supabase/supabase-js';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import type { RealtimeChannel, User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { USER_ACCESS_STATUS } from '@/lib/access-status';
 import type { PlanName, UserPlan } from '@/types';
 
 interface AuthContextValue {
@@ -31,18 +32,6 @@ function avatarStorageKey(userId: string) {
   return `profile-avatar:${userId}`;
 }
 
-async function fetchUserPlan(authUserId: string): Promise<UserPlan> {
-  const { data } = await supabase
-    .from('users')
-    .select('plan, plan_expires_at')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle();
-  return {
-    plan: (data?.plan as PlanName) ?? 'free',
-    expiresAt: data?.plan_expires_at ?? null,
-  };
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser]       = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -50,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [avatarUrl, setAvatarUrlState] = useState<string | null>(null);
   const [plan, setPlan]               = useState<PlanName>('free');
   const [planExpiresAt, setPlanExpiresAt] = useState<string | null>(null);
+  const statusChannelRef = useRef<RealtimeChannel | null>(null);
 
   const isPro = (plan === 'basic' || plan === 'premium') &&
     (planExpiresAt === null || new Date(planExpiresAt) > new Date());
@@ -57,16 +47,100 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function loadUser(u: User) {
     const storedAvatar = window.localStorage.getItem(avatarStorageKey(u.id));
     setAvatarUrlState(storedAvatar ?? null);
-    const userPlan = await fetchUserPlan(u.id);
+    const { data, error } = await supabase
+      .from('users')
+      .select('plan, plan_expires_at, status')
+      .eq('auth_user_id', u.id)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || data.status === USER_ACCESS_STATUS.inactive) {
+      await supabase.auth.signOut();
+      return;
+    }
+
+    const userPlan: UserPlan = {
+      plan: (data?.plan as PlanName) ?? 'free',
+      expiresAt: data?.plan_expires_at ?? null,
+    };
+
     setPlan(userPlan.plan);
     setPlanExpiresAt(userPlan.expiresAt);
   }
+
+  async function ensureUserIsActive(authUserId: string) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('status')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || data.status === USER_ACCESS_STATUS.inactive) {
+      await supabase.auth.signOut();
+    }
+  }
+
+  function clearUserState() {
+    setAvatarUrlState(null);
+    setPlan('free');
+    setPlanExpiresAt(null);
+  }
+
+  const clearStatusSubscription = useCallback(() => {
+    if (!statusChannelRef.current) return;
+    void supabase.removeChannel(statusChannelRef.current);
+    statusChannelRef.current = null;
+  }, []);
+
+  const subscribeToUserStatus = useCallback((authUserId: string) => {
+    clearStatusSubscription();
+
+    const channel = supabase
+      .channel(`user-status:${authUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `auth_user_id=eq.${authUserId}`,
+        },
+        async (payload) => {
+          const previousStatus = Number(payload.old?.status ?? 0);
+          const nextStatus = Number(payload.new?.status ?? 0);
+
+          if (
+            previousStatus === USER_ACCESS_STATUS.active &&
+            nextStatus === USER_ACCESS_STATUS.inactive
+          ) {
+            await supabase.auth.signOut();
+          }
+        },
+      )
+      .subscribe();
+
+    statusChannelRef.current = channel;
+  }, [clearStatusSubscription]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) loadUser(session.user);
+      if (session?.user) {
+        loadUser(session.user).catch(() => {
+          void supabase.auth.signOut();
+        });
+        subscribeToUserStatus(session.user.id);
+      } else {
+        clearUserState();
+      }
       setLoading(false);
     });
 
@@ -74,17 +148,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        loadUser(session.user);
+        loadUser(session.user).catch(() => {
+          void supabase.auth.signOut();
+        });
+        subscribeToUserStatus(session.user.id);
       } else {
-        setAvatarUrlState(null);
-        setPlan('free');
-        setPlanExpiresAt(null);
+        clearStatusSubscription();
+        clearUserState();
       }
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      subscription.unsubscribe();
+      clearStatusSubscription();
+    };
+  }, [clearStatusSubscription, subscribeToUserStatus]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const intervalId = window.setInterval(() => {
+      ensureUserIsActive(user.id).catch(() => {
+        void supabase.auth.signOut();
+      });
+    }, 60000);
+
+    return () => window.clearInterval(intervalId);
+  }, [user]);
 
   const setAvatarUrl = (value: string | null) => {
     if (!user) return;

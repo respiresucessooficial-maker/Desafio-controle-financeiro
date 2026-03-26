@@ -58,6 +58,14 @@ function LoginPageInner() {
     setSuccess('');
   }
 
+  function clearFormFields() {
+    setName('');
+    setCpf('');
+    setEmail('');
+    setPassword('');
+    setShowPass(false);
+  }
+
   async function validateUserAccess(authUserId: string) {
     const { data: accessUser, error: accessError } = await supabase
       .from('users')
@@ -244,6 +252,7 @@ function LoginPageInner() {
                 onClick={() => {
                   setMode(tab);
                   resetState();
+                  clearFormFields();
                 }}
                 className={`relative flex-1 py-4 text-sm font-semibold transition-colors ${
                   mode === tab
@@ -294,7 +303,7 @@ function LoginPageInner() {
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.25, ease: 'easeInOut' }}
-                      className="flex flex-col gap-3.5 pb-3.5"
+                      className="flex flex-col gap-3.5"
                     >
                       <div className="relative">
                         <User size={15} className="absolute left-3 top-3.5 text-slate-400" />

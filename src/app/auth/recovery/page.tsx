@@ -1,13 +1,21 @@
 'use client';
 
+import { Suspense, useMemo } from 'react';
 import Link from 'next/link';
-import { useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, KeyRound, TriangleAlert } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export default function RecoveryLinkPage() {
+  return (
+    <Suspense>
+      <RecoveryLinkPageInner />
+    </Suspense>
+  );
+}
+
+function RecoveryLinkPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isDark } = useTheme();

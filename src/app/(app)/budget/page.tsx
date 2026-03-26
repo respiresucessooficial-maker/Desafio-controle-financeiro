@@ -13,6 +13,7 @@ import { useAppData } from '@/contexts/AppDataContext';
 import { getCategoryDef } from '@/data/categories';
 import { useFabAction } from '@/contexts/FabContext';
 import BudgetDetailDrawer from '@/components/budget/BudgetDetailDrawer';
+import Select from '@/components/ui/Select';
 import { Budget } from '@/types';
 import { formatCurrencyInput, parseCurrencyInput } from '@/lib/currencyInput';
 
@@ -196,22 +197,14 @@ function BudgetFormModal({
               </button>
             </div>
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              {/* Categoria — select nativo estilizado */}
-              <div>
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">
-                  Categoria
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  disabled={isEditing}
-                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-50 text-sm font-semibold focus:outline-none focus:border-amber-400 transition-colors disabled:opacity-60"
-                >
-                  {selectable.map((c) => (
-                    <option key={c.name} value={c.name}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Categoria — select customizado */}
+              <Select
+                label="Categoria"
+                value={category}
+                onChange={setCategory}
+                disabled={isEditing}
+                options={selectable.map((c) => ({ value: c.name, label: c.name, color: c.color }))}
+              />
 
               <div>
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">

@@ -151,7 +151,7 @@ export default function LandingPage() {
             </motion.p>
 
             <motion.div variants={fade} className="flex items-center gap-4 flex-wrap">
-              <Link href="/login?mode=register">
+              <Link href="https://pay.kiwify.com.br/VMQ061I" target="_blank" rel="noopener noreferrer">
                 <motion.span
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-[15px] cursor-pointer transition-colors shadow-lg shadow-amber-500/25"
@@ -350,7 +350,7 @@ export default function LandingPage() {
           </div>
 
           <div className="flex flex-col items-start md:items-end gap-4 flex-shrink-0">
-            <Link href="/login">
+            <Link href="https://pay.kiwify.com.br/VMQ061I" target="_blank" rel="noopener noreferrer">
               <motion.span
                 whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                 className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-base cursor-pointer transition-colors shadow-lg shadow-amber-500/20"
